@@ -1,0 +1,26 @@
+[Unit]
+Description=AirTally REST API Service
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=airtally
+Group=airtally
+WorkingDirectory=/home/airtally/airtally/airtally-restapi
+Environment="RUST_LOG=info"
+ExecStart=/home/airtally/airtally/airtally-restapi/target/release/airtally-restapi
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/airtally/airtally/airtally-restapi/logs/service.log
+StandardError=append:/home/airtally/airtally/airtally-restapi/logs/service_error.log
+
+# Security hardening (optional but recommended)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/airtally/airtally/airtally-restapi/logs
+
+[Install]
+WantedBy=multi-user.target

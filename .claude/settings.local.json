@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo check)",
+      "Bash(cargo run)",
+      "Bash(timeout 10 cargo run)",
+      "Bash(curl -X GET http://127.0.0.1:3000/api/flights -w \"\\nHTTP Status: %{http_code}\\n\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
