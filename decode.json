@@ -1,0 +1,13 @@
+{
+  "passenger_name": "MUHAMMAD BAYU",
+  "booking_code": "SMMTHQ",
+  "origin": "DHX",
+  "destination": "CGK",
+  "airline_code": "ID",
+  "flight_number": 6473,
+  "flight_date_julian": "032",
+  "cabin_class": "Y",
+  "seat_number": "007A",
+  "sequence_number": "0002",
+  "ticket_status": "E"
+}

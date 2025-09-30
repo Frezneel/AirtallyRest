@@ -1,0 +1,334 @@
+# Server-Side Requirements untuk AirTally Flight Management
+
+## 1. **Database Schema**
+
+### Tabel `flights`:
+```sql
+CREATE TABLE flights (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  flight_number VARCHAR(10) NOT NULL,
+  airline VARCHAR(100) NOT NULL,
+  aircraft VARCHAR(50) NOT NULL,
+  departure_time DATETIME NOT NULL,
+  destination VARCHAR(10) NOT NULL,
+  gate VARCHAR(10) NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME,
+  device_id VARCHAR(50),
+  INDEX idx_flight_number (flight_number),
+  INDEX idx_departure_time (departure_time),
+  INDEX idx_active (is_active)
+);
+```
+
+## 2. **API Endpoints**
+
+### Flight Management:
+- `GET /api/flights` - Get all flights
+- `GET /api/flights?date=YYYY-MM-DD` - Get flights by date
+- `POST /api/flights` - Create new flight
+- `POST /api/flights_decoder` - Get all flights
+- `PUT /api/flights/{id}` - Update flight
+- `DELETE /api/flights/{id}` - Delete flight
+- `GET /api/flights/{id}/statistics` - Get flight scan stats
+
+### Scan Data (Updated):
+- `POST /api/scan-data` - Create scan (now with flightId)
+- `GET /api/scan-data?flight_id={id}` - Get scans by flight
+- `GET /api/scan-data?date_range=start,end` - Get scans by date range
+
+### Sync Endpoints:
+- `GET /api/sync/flights?last_sync=timestamp` - Incremental sync
+- `POST /api/sync/flights/bulk` - Bulk flight sync
+
+## 3. **Request/Response Models**
+
+### Flight JSON Structure:
+```json
+{
+  "id": 1,
+  "flightNumber": "GA123",
+  "airline": "Garuda Indonesia",
+  "aircraft": "Boeing 737-800",
+  "departureTime": "2024-01-15T14:30:00Z",
+  "destination": "CGK",
+  "gate": "A5",
+  "isActive": true,
+  "createdAt": "2024-01-15T08:00:00Z",
+  "updatedAt": "2024-01-15T10:00:00Z"
+}
+```
+
+### Scan Data JSON (Updated):
+```json
+{
+  "barcodeValue": "ABC123DEF456",
+  "barcodeFormat": "PDF417",
+  "scanTime": "2024-01-15T14:35:00Z",
+  "deviceId": "device_123456",
+  "flightId": 1
+}
+```
+
+## 4. **Business Logic Requirements**
+
+### Validation Rules:
+- Unique flight number per day
+- Departure time validation
+- Gate format validation (A1-Z99)
+- Airport code validation (3 letters)
+
+### Conflict Resolution:
+- Last-write-wins for concurrent edits
+- Tombstone records for deletions
+- Incremental sync based on timestamps
+
+### Statistics & Reporting:
+- Real-time scan counts per flight
+- Daily/weekly flight reports
+- Device activity tracking
+- Export capabilities (CSV/PDF)
+
+## 5. **Technical Implementation**
+
+### Stack Recommendations:
+- **Backend**: Rust/Axum
+- **Database**: PostgreSQL
+- **Authentication**: JWT tokens
+- **Real-time**: WebSocket untuk live updates
+
+### Performance Considerations:
+- Database indexing untuk queries cepat
+- Caching untuk flight data (Redis)
+- Rate limiting untuk API calls
+- Batch processing untuk bulk operations
+
+### Security Requirements:
+- API authentication & authorization
+- Input validation & sanitization
+- SQL injection protection
+- CORS configuration
+- Request logging & monitoring
+
+## 6. **Deployment & Monitoring**
+
+### Infrastructure:
+- Docker containers
+- Load balancer untuk high availability
+- Database backup strategy
+- Log aggregation (ELK stack)
+- Health check endpoints
+
+### Monitoring:
+- API response times
+- Database performance
+- Sync success rates
+- Error tracking & alerting
+
+## 7. **Detailed API Specifications**
+
+### GET /api/flights
+**Response:**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": 1,
+      "flightNumber": "GA123",
+      "airline": "Garuda Indonesia",
+      "aircraft": "Boeing 737-800",
+      "departureTime": "2024-01-15T14:30:00Z",
+      "destination": "CGK",
+      "gate": "A5",
+      "isActive": true,
+      "createdAt": "2024-01-15T08:00:00Z",
+      "updatedAt": null
+    }
+  ],
+  "total": 1
+}
+```
+
+### POST /api/flights
+**Request Body:**
+```json
+{
+  "flightNumber": "JT456",
+  "airline": "Lion Air",
+  "aircraft": "Airbus A320",
+  "departureTime": "2024-01-15T16:00:00Z",
+  "destination": "DPS",
+  "gate": "B3",
+  "isActive": true,
+  "deviceId": "device_123456"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Flight created successfully",
+  "data": {
+    "id": 2,
+    "flightNumber": "JT456",
+    "airline": "Lion Air",
+    "aircraft": "Airbus A320",
+    "departureTime": "2024-01-15T16:00:00Z",
+    "destination": "DPS",
+    "gate": "B3",
+    "isActive": true,
+    "createdAt": "2024-01-15T10:00:00Z",
+    "updatedAt": null
+  }
+}
+```
+
+### POST /api/scan-data
+**Request Body:**
+```json
+{
+  "barcodeValue": "ABC123DEF456GHI789",
+  "barcodeFormat": "PDF417",
+  "scanTime": "2024-01-15T14:35:00Z",
+  "deviceId": "device_123456",
+  "flightId": 1
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Scan data saved successfully",
+  "data": {
+    "id": 1,
+    "barcodeValue": "ABC123DEF456GHI789",
+    "barcodeFormat": "PDF417",
+    "scanTime": "2024-01-15T14:35:00Z",
+    "flightId": 1,
+    "createdAt": "2024-01-15T14:35:00Z"
+  }
+}
+```
+
+### GET /api/flights/{id}/statistics
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "flightId": 1,
+    "flightNumber": "GA123",
+    "totalScans": 25,
+    "uniqueScans": 23,
+    "duplicateScans": 2,
+    "scansByHour": [
+      {"hour": "14:00", "count": 5},
+      {"hour": "15:00", "count": 10},
+      {"hour": "16:00", "count": 10}
+    ],
+    "topDevices": [
+      {"deviceId": "device_123456", "scanCount": 15},
+      {"deviceId": "device_789012", "scanCount": 10}
+    ]
+  }
+}
+```
+
+## 8. **Error Handling**
+
+### Standard Error Response Format:
+```json
+{
+  "status": "error",
+  "message": "Error description",
+  "code": "ERROR_CODE",
+  "details": {
+    "field": "validation error details"
+  }
+}
+```
+
+### Common Error Codes:
+- `FLIGHT_NOT_FOUND` - Flight with given ID not found
+- `DUPLICATE_FLIGHT` - Flight number already exists for that date
+- `INVALID_GATE_FORMAT` - Gate format should be A1-Z99
+- `INVALID_DEPARTURE_TIME` - Departure time cannot be in the past
+- `DEVICE_NOT_AUTHORIZED` - Device not authorized to perform this action
+
+## 9. **Database Migration Scripts**
+
+### Initial Migration:
+```sql
+-- Create flights table
+CREATE TABLE flights (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  flight_number VARCHAR(10) NOT NULL,
+  airline VARCHAR(100) NOT NULL,
+  aircraft VARCHAR(50) NOT NULL,
+  departure_time DATETIME NOT NULL,
+  destination VARCHAR(10) NOT NULL,
+  gate VARCHAR(10) NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME,
+  device_id VARCHAR(50)
+);
+
+-- Add indexes
+CREATE INDEX idx_flight_number ON flights(flight_number);
+CREATE INDEX idx_departure_time ON flights(departure_time);
+CREATE INDEX idx_active ON flights(is_active);
+
+-- Add flight_id to scan_data
+ALTER TABLE scan_data ADD COLUMN flight_id INTEGER;
+CREATE INDEX idx_flight_id ON scan_data(flight_id);
+
+-- Add foreign key constraint (if supported)
+-- ALTER TABLE scan_data ADD FOREIGN KEY (flight_id) REFERENCES flights(id);
+```
+
+## 10. **Testing Requirements**
+
+### Unit Tests:
+- Flight CRUD operations
+- Scan data validation
+- Business logic validation
+- Error handling
+
+### Integration Tests:
+- API endpoint testing
+- Database operations
+- Client-server sync
+- Real-world scenarios
+
+### Load Testing:
+- Concurrent flight creation
+- Bulk scan data ingestion
+- API response times under load
+- Database performance
+
+### Fitur TAMBAHAN 
+- Tabel decode_barcode (hasil scan yang diterima data barcode dirubah menjadi data detail yang disimpan ke tabel) dan diperlukan pembuatan rest API untuk melihat list dalam bentuk detailnya.
+
+Hasil barcode : 
+M1BAYU/MUHAMMAD MR
+ESMMTHQ DHXCGKID 6473
+032Y007A0002 300
+
+Menjadi detail:
+Nama Penumpang: MUHAMMAD/BAYU
+Kode Booking (PNR): SMMTHQ
+Asal Keberangkatan: DHX (Bandara Dhoho, Kediri)
+Tujuan: CGK (Bandara Soekarno-Hatta, Jakarta)
+Maskapai: ID (Batik Air)
+Nomor Penerbangan: 6473
+Tanggal Penerbangan (Format Julian): 032 (hari ke-32 dalam setahun, yaitu 1 Februari)
+Kelas Kabin: Y (Ekonomi)
+Nomor Kursi: 007A
+Nomor Urut Check-in (Sequence Number): 0002
+Status Tiket: E (Tiket Elektronik)
+
