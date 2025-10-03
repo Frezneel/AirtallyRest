@@ -201,6 +201,12 @@ pub struct GetScanDataQuery {
     pub date_range: Option<String>, // "start,end" format
 }
 
+// Struktur untuk parameter query di GET /api/decoded-barcodes
+#[derive(Debug, Deserialize)]
+pub struct GetDecodedBarcodesQuery {
+    pub flight_id: Option<i32>,
+}
+
 // Struktur untuk parameter query di GET /api/sync/flights
 #[derive(Debug, Deserialize)]
 pub struct SyncFlightsQuery {
@@ -218,6 +224,17 @@ pub struct FlightStatistics {
     pub duplicate_scans: i64,
     pub scans_by_hour: Vec<ScansByHour>,
     pub top_devices: Vec<TopDevice>,
+}
+
+// Struktur untuk response decoded barcode statistics
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DecodedStatistics {
+    pub flight_id: i32,
+    pub flight_number: String,
+    pub total_decoded: i64,
+    pub valid_tickets: i64,
+    pub invalid_tickets: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
@@ -248,7 +265,7 @@ pub struct ApiResponse<T> {
 
 // Model untuk tabel decode_barcode (sesuai dengan decode.json)
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct DecodedBarcode {
     pub id: i32,
     pub barcode_value: String,

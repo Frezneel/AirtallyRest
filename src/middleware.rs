@@ -1,9 +1,8 @@
 use axum::{
     body::{Body, Bytes},
     extract::Request,
-    http::{HeaderMap, StatusCode},
     middleware::Next,
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use http_body_util::BodyExt;
 use std::time::Instant;
