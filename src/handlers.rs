@@ -4,6 +4,7 @@ use crate::{
     models::{
         ApiResponse, CreateFlight, ScanDataInput, ScanData, Flight, FlightStatistics, GetFlightsQuery,
         GetScanDataQuery, SyncFlightsQuery, UpdateFlight, DecodedBarcode, DecodeRequest,
+        GetDecodedBarcodesQuery, DecodedStatistics,
     },
 };
 use axum::{
@@ -124,6 +125,21 @@ pub async fn get_flight_statistics(
     Ok(Json(response))
 }
 
+// Handler untuk mendapatkan statistik decoded barcodes per penerbangan
+pub async fn get_decoded_statistics(
+    State(pool): State<PgPool>,
+    Path(id): Path<i32>,
+) -> Result<Json<ApiResponse<DecodedStatistics>>, AppError> {
+    let stats = database::get_decoded_statistics(&pool, id).await?;
+    let response = ApiResponse {
+        status: "success".to_string(),
+        message: None,
+        data: Some(stats),
+        total: None,
+    };
+    Ok(Json(response))
+}
+
 // Handler untuk membuat data scan baru
 pub async fn create_scan(
     State(pool): State<PgPool>,
@@ -229,8 +245,7 @@ pub async fn sync_flights_bulk(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-// Handler untuk decode barcode IATA (TEMPORARILY DISABLED)
-/*
+// Handler untuk decode barcode IATA
 pub async fn decode_barcode(
     State(pool): State<PgPool>,
     Json(payload): Json<DecodeRequest>,
@@ -249,8 +264,9 @@ pub async fn decode_barcode(
 // Handler untuk mendapatkan semua decoded barcodes
 pub async fn get_decoded_barcodes(
     State(pool): State<PgPool>,
+    Query(query): Query<GetDecodedBarcodesQuery>,
 ) -> Result<Json<ApiResponse<Vec<DecodedBarcode>>>, AppError> {
-    let decoded_list = database::get_all_decoded_barcodes(&pool).await?;
+    let decoded_list = database::get_all_decoded_barcodes(&pool, query.flight_id).await?;
     let response = ApiResponse {
         status: "success".to_string(),
         message: None,
@@ -259,4 +275,3 @@ pub async fn get_decoded_barcodes(
     };
     Ok(Json(response))
 }
-*/

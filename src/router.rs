@@ -1,7 +1,7 @@
 use crate::{handlers, middleware};
 use axum::{
     middleware as axum_middleware,
-    routing::{get, post, put, delete},
+    routing::{get, post},
     Router,
 };
 use sqlx::PgPool;
@@ -17,13 +17,14 @@ pub fn create_router(db_pool: PgPool) -> Router {
                 .delete(handlers::delete_flight),
         )
         .route("/api/flights/{id}/statistics", get(handlers::get_flight_statistics))
+        .route("/api/flights/{id}/decoded-statistics", get(handlers::get_decoded_statistics))
         // Rute untuk endpoint flights_decoder sesuai plan
         .route("/api/flights_decoder", get(handlers::get_flights))
         // Rute untuk Data Scan
         .route("/api/scan-data", get(handlers::get_scan_data).post(handlers::create_scan))
-        // Rute untuk Barcode Decoder (TEMPORARILY DISABLED - table decode_barcode belum ada)
-        // .route("/api/decode-barcode", post(handlers::decode_barcode))
-        // .route("/api/decoded-barcodes", get(handlers::get_decoded_barcodes))
+        // Rute untuk Barcode Decoder
+        .route("/api/decode-barcode", post(handlers::decode_barcode))
+        .route("/api/decoded-barcodes", get(handlers::get_decoded_barcodes))
         // Rute untuk Sinkronisasi
         .route("/api/sync/flights", get(handlers::sync_flights))
         .route("/api/sync/flights/bulk", post(handlers::sync_flights_bulk))

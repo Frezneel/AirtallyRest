@@ -19,7 +19,8 @@ pub async fn decode_barcode_iata(
 
     // Parse barcode IATA format sesuai contoh di plan
     // Format: M1BAYU/MUHAMMAD MR ESMMTHQ DHXCGKID 6473 032Y007A0002 300
-    if barcode.len() < 60 {
+    // Minimum length: 58 characters (IATA BCBP standard)
+    if barcode.len() < 58 {
         return Err(AppError::InvalidBarcodeFormat);
     }
 
@@ -89,7 +90,8 @@ pub async fn get_all_decoded_barcodes(pool: &PgPool) -> Result<Vec<DecodedBarcod
 // Helper functions untuk parsing IATA BCBP format
 fn extract_passenger_name(barcode: &str) -> String {
     // Format: M1BAYU/MUHAMMAD MR -> MUHAMMAD BAYU (space separator, sesuai decode.json)
-    if let Some(name_part) = barcode.get(2..20) {
+    // Position 2-21 (20 characters)
+    if let Some(name_part) = barcode.get(2..22) {
         let name = name_part.trim();
         if let Some(slash_pos) = name.find('/') {
             let last_name = &name[..slash_pos];
@@ -101,28 +103,28 @@ fn extract_passenger_name(barcode: &str) -> String {
 }
 
 fn extract_booking_code(barcode: &str) -> String {
-    // PNR biasanya di posisi 21-26
-    barcode.get(21..27).unwrap_or("UNKNOWN").trim().to_string()
+    // PNR/Booking Reference at position 23-29 (7 characters)
+    barcode.get(23..30).unwrap_or("UNKNOWN").trim().to_string()
 }
 
 fn extract_origin(barcode: &str) -> String {
-    // Origin biasanya di posisi 28-30
-    barcode.get(28..31).unwrap_or("UNK").to_string()
+    // Origin airport code at position 30-32 (3 characters)
+    barcode.get(30..33).unwrap_or("UNK").to_string()
 }
 
 fn extract_destination(barcode: &str) -> String {
-    // Destination biasanya di posisi 31-33
-    barcode.get(31..34).unwrap_or("UNK").to_string()
+    // Destination airport code at position 33-35 (3 characters)
+    barcode.get(33..36).unwrap_or("UNK").to_string()
 }
 
 fn extract_airline_code(barcode: &str) -> String {
-    // Airline code biasanya di posisi 34-35
-    barcode.get(34..36).unwrap_or("UN").to_string()
+    // Airline code at position 36-38 (2-3 characters)
+    barcode.get(36..39).unwrap_or("UN").trim().to_string()
 }
 
 fn extract_flight_number(barcode: &str) -> i32 {
-    // Flight number biasanya di posisi 37-40
-    barcode.get(37..41)
+    // Flight number at position 39-43 (5 characters)
+    barcode.get(39..44)
         .unwrap_or("0000")
         .trim()
         .parse::<i32>()
@@ -130,26 +132,26 @@ fn extract_flight_number(barcode: &str) -> i32 {
 }
 
 fn extract_julian_date(barcode: &str) -> String {
-    // Julian date biasanya di posisi 42-44
-    barcode.get(42..45).unwrap_or("000").to_string()
+    // Julian date at position 44-46 (3 characters)
+    barcode.get(44..47).unwrap_or("000").to_string()
 }
 
 fn extract_cabin_class(barcode: &str) -> String {
-    // Cabin class biasanya di posisi 45
-    barcode.get(45..46).unwrap_or("Y").to_string()
+    // Cabin class at position 47 (1 character)
+    barcode.get(47..48).unwrap_or("Y").to_string()
 }
 
 fn extract_seat_number(barcode: &str) -> String {
-    // Seat number biasanya di posisi 46-49
-    barcode.get(46..50).unwrap_or("000A").trim().to_string()
+    // Seat number at position 48-51 (4 characters)
+    barcode.get(48..52).unwrap_or("000A").trim().to_string()
 }
 
 fn extract_sequence_number(barcode: &str) -> String {
-    // Sequence number biasanya di posisi 50-53
-    barcode.get(50..54).unwrap_or("0000").trim().to_string()
+    // Sequence number at position 52-56 (5 characters)
+    barcode.get(52..57).unwrap_or("0000").trim().to_string()
 }
 
 fn extract_ticket_status(barcode: &str) -> String {
-    // Ticket status biasanya di posisi 54
-    barcode.get(54..55).unwrap_or("E").to_string()
+    // Ticket status at position 57 (1 character)
+    barcode.get(57..58).unwrap_or("E").to_string()
 }

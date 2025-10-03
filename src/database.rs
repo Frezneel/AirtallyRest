@@ -2,7 +2,7 @@ use crate::{
     errors::AppError,
     models::{
         CreateFlight, Flight, FlightStatistics, GetScanDataQuery, ScanData, ScanDataInput,
-        ScansByHour, TopDevice, UpdateFlight, DecodedBarcode, DecodeRequest,
+        ScansByHour, TopDevice, UpdateFlight, DecodedBarcode, DecodeRequest, DecodedStatistics,
     },
 };
 use chrono::{DateTime, NaiveDate, Utc};
@@ -33,10 +33,10 @@ pub async fn create_flight(pool: &PgPool, flight: CreateFlight) -> Result<Flight
         .fetch_one(pool)
         .await
         .map_err(|e| {
-            if let sqlx::Error::Database(db_err) = &e {
-                if db_err.constraint() == Some("idx_unique_flight_per_day") {
-                    return AppError::DuplicateFlight;
-                }
+            if let sqlx::Error::Database(db_err) = &e
+                && db_err.constraint() == Some("idx_unique_flight_per_day")
+            {
+                return AppError::DuplicateFlight;
             }
             AppError::DatabaseError(e)
         })?;
@@ -192,6 +192,49 @@ pub async fn get_flight_statistics(pool: &PgPool, id: i32) -> Result<FlightStati
     })
 }
 
+// Fungsi untuk mengambil statistik decoded barcodes per penerbangan
+pub async fn get_decoded_statistics(
+    pool: &PgPool,
+    flight_id: i32,
+) -> Result<DecodedStatistics, AppError> {
+    // Get flight info first
+    let flight = get_flight_by_id(pool, flight_id).await?;
+
+    // Count total decoded barcodes (JOIN with scan_data by flight_id)
+    let total_decoded: (i64,) = sqlx::query_as(
+        r#"
+        SELECT COUNT(*)
+        FROM decode_barcode db
+        JOIN scan_data sd ON db.scan_data_id = sd.id
+        WHERE sd.flight_id = $1
+        "#,
+    )
+    .bind(flight_id)
+    .fetch_one(pool)
+    .await?;
+
+    // Count valid tickets (status '0' or '3')
+    let valid_tickets: (i64,) = sqlx::query_as(
+        r#"
+        SELECT COUNT(*)
+        FROM decode_barcode db
+        JOIN scan_data sd ON db.scan_data_id = sd.id
+        WHERE sd.flight_id = $1 AND db.ticket_status IN ('0', '3')
+        "#,
+    )
+    .bind(flight_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(DecodedStatistics {
+        flight_id,
+        flight_number: flight.flight_number,
+        total_decoded: total_decoded.0,
+        valid_tickets: valid_tickets.0,
+        invalid_tickets: total_decoded.0 - valid_tickets.0,
+    })
+}
+
 // Fungsi untuk membuat data scan baru
 pub async fn create_scan_data(
     pool: &PgPool,
@@ -232,11 +275,11 @@ pub async fn get_scan_data(
 
     if let Some(date_range) = query.date_range {
         let parts: Vec<&str> = date_range.split(',').collect();
-        if parts.len() == 2 {
-            if let (Ok(start), Ok(end)) = (parts[0].parse::<DateTime<Utc>>(), parts[1].parse::<DateTime<Utc>>()) {
-                query_builder.push(" AND scan_time BETWEEN ").push_bind(start).push(" AND ").push_bind(end);
-                count_builder.push(" AND scan_time BETWEEN ").push_bind(start).push(" AND ").push_bind(end);
-            }
+        if parts.len() == 2
+            && let (Ok(start), Ok(end)) = (parts[0].parse::<DateTime<Utc>>(), parts[1].parse::<DateTime<Utc>>())
+        {
+            query_builder.push(" AND scan_time BETWEEN ").push_bind(start).push(" AND ").push_bind(end);
+            count_builder.push(" AND scan_time BETWEEN ").push_bind(start).push(" AND ").push_bind(end);
         }
     }
 
@@ -312,8 +355,173 @@ pub async fn bulk_insert_flights(
     Ok(total_affected as usize)
 }
 
-// TODO: Implement barcode decoder functions after table is created
-// Will be uncommented after running migration
+// Barcode decoder functions
 
-// Helper functions untuk parsing IATA BCBP format (commented out for now)
+// Fungsi untuk decode barcode IATA format
+pub async fn decode_barcode_iata(
+    pool: &PgPool,
+    request: DecodeRequest,
+) -> Result<DecodedBarcode, AppError> {
+    let barcode = &request.barcode_value;
 
+    // Parse barcode IATA format sesuai contoh di plan
+    // Format: M1BAYU/MUHAMMAD MR ESMMTHQ DHXCGKID 6473 032Y007A0002 300
+    // Minimum length: 58 characters (IATA BCBP standard)
+    if barcode.len() < 58 {
+        return Err(AppError::InvalidBarcodeFormat);
+    }
+
+    // Ekstrak data sesuai format IATA BCBP
+    let passenger_name = extract_passenger_name(barcode);
+    let booking_code = extract_booking_code(barcode);
+    let origin = extract_origin(barcode);
+    let destination = extract_destination(barcode);
+    let airline_code = extract_airline_code(barcode);
+    let flight_number = extract_flight_number(barcode);
+    let flight_date_julian = extract_julian_date(barcode);
+    let cabin_class = extract_cabin_class(barcode);
+    let seat_number = extract_seat_number(barcode);
+    let sequence_number = extract_sequence_number(barcode);
+    let ticket_status = extract_ticket_status(barcode);
+
+    let decoded = sqlx::query_as!(
+        DecodedBarcode,
+        r#"
+        INSERT INTO decode_barcode
+        (barcode_value, passenger_name, booking_code, origin, destination, airline_code,
+         flight_number, flight_date_julian, cabin_class, seat_number, sequence_number,
+         ticket_status, scan_data_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        RETURNING id, barcode_value, passenger_name, booking_code, origin, destination,
+                  airline_code, flight_number, flight_date_julian, cabin_class, seat_number,
+                  sequence_number, ticket_status, scan_data_id, created_at
+        "#,
+        barcode,
+        passenger_name,
+        booking_code,
+        origin,
+        destination,
+        airline_code,
+        flight_number,
+        flight_date_julian,
+        cabin_class,
+        seat_number,
+        sequence_number,
+        ticket_status,
+        request.scan_data_id
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(decoded)
+}
+
+// Fungsi untuk mengambil semua decoded barcodes dengan filter flight_id optional
+pub async fn get_all_decoded_barcodes(
+    pool: &PgPool,
+    flight_id: Option<i32>,
+) -> Result<Vec<DecodedBarcode>, AppError> {
+    let decoded_list = if let Some(fid) = flight_id {
+        // Filter by flight_id via JOIN dengan scan_data
+        sqlx::query_as!(
+            DecodedBarcode,
+            r#"
+            SELECT db.id, db.barcode_value, db.passenger_name, db.booking_code, db.origin, db.destination,
+                   db.airline_code, db.flight_number, db.flight_date_julian, db.cabin_class, db.seat_number,
+                   db.sequence_number, db.ticket_status, db.scan_data_id, db.created_at
+            FROM decode_barcode db
+            JOIN scan_data sd ON db.scan_data_id = sd.id
+            WHERE sd.flight_id = $1
+            ORDER BY db.created_at DESC
+            "#,
+            fid
+        )
+        .fetch_all(pool)
+        .await?
+    } else {
+        // Get all decoded barcodes
+        sqlx::query_as!(
+            DecodedBarcode,
+            r#"
+            SELECT id, barcode_value, passenger_name, booking_code, origin, destination,
+                   airline_code, flight_number, flight_date_julian, cabin_class, seat_number,
+                   sequence_number, ticket_status, scan_data_id, created_at
+            FROM decode_barcode
+            ORDER BY created_at DESC
+            "#
+        )
+        .fetch_all(pool)
+        .await?
+    };
+
+    Ok(decoded_list)
+}
+
+// Helper functions untuk parsing IATA BCBP format
+fn extract_passenger_name(barcode: &str) -> String {
+    // Format: M1BAYU/MUHAMMAD MR -> MUHAMMAD BAYU (space separator, sesuai decode.json)
+    // Position 2-21 (20 characters)
+    if let Some(name_part) = barcode.get(2..22) {
+        let name = name_part.trim();
+        if let Some(slash_pos) = name.find('/') {
+            let last_name = &name[..slash_pos];
+            let first_name = &name[slash_pos+1..].trim_end_matches(" MR").trim_end_matches(" MS").trim();
+            return format!("{} {}", first_name, last_name);  // Space separator
+        }
+    }
+    "UNKNOWN UNKNOWN".to_string()
+}
+
+fn extract_booking_code(barcode: &str) -> String {
+    // PNR/Booking Reference at position 23-29 (7 characters)
+    barcode.get(23..30).unwrap_or("UNKNOWN").trim().to_string()
+}
+
+fn extract_origin(barcode: &str) -> String {
+    // Origin airport code at position 30-32 (3 characters)
+    barcode.get(30..33).unwrap_or("UNK").to_string()
+}
+
+fn extract_destination(barcode: &str) -> String {
+    // Destination airport code at position 33-35 (3 characters)
+    barcode.get(33..36).unwrap_or("UNK").to_string()
+}
+
+fn extract_airline_code(barcode: &str) -> String {
+    // Airline code at position 36-38 (2-3 characters)
+    barcode.get(36..39).unwrap_or("UN").trim().to_string()
+}
+
+fn extract_flight_number(barcode: &str) -> i32 {
+    // Flight number at position 39-43 (5 characters)
+    barcode.get(39..44)
+        .unwrap_or("0000")
+        .trim()
+        .parse::<i32>()
+        .unwrap_or(0)
+}
+
+fn extract_julian_date(barcode: &str) -> String {
+    // Julian date at position 44-46 (3 characters)
+    barcode.get(44..47).unwrap_or("000").to_string()
+}
+
+fn extract_cabin_class(barcode: &str) -> String {
+    // Cabin class at position 47 (1 character)
+    barcode.get(47..48).unwrap_or("Y").to_string()
+}
+
+fn extract_seat_number(barcode: &str) -> String {
+    // Seat number at position 48-51 (4 characters)
+    barcode.get(48..52).unwrap_or("000A").trim().to_string()
+}
+
+fn extract_sequence_number(barcode: &str) -> String {
+    // Sequence number at position 52-56 (5 characters)
+    barcode.get(52..57).unwrap_or("0000").trim().to_string()
+}
+
+fn extract_ticket_status(barcode: &str) -> String {
+    // Ticket status at position 57 (1 character)
+    barcode.get(57..58).unwrap_or("E").to_string()
+}
