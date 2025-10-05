@@ -4,6 +4,7 @@ use crate::{
         CreateFlight, Flight, FlightStatistics, GetScanDataQuery, ScanData, ScanDataInput,
         ScansByHour, TopDevice, UpdateFlight, DecodedBarcode, DecodeRequest,
     },
+    barcode_parser,
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
@@ -11,31 +12,27 @@ use sqlx::PgPool;
 // NOTE: Barcode decoder functions - Uncomment setelah running migration decode_barcode
 
 // Fungsi untuk decode barcode IATA format
+// Uses shared parser module synchronized with mobile app
 pub async fn decode_barcode_iata(
     pool: &PgPool,
     request: DecodeRequest,
 ) -> Result<DecodedBarcode, AppError> {
-    let barcode = &request.barcode_value;
+    // Use shared parser (synchronized with mobile app)
+    let parsed = barcode_parser::parse_iata_bcbp(&request.barcode_value)
+        .ok_or(AppError::InvalidBarcodeFormat)?;
 
-    // Parse barcode IATA format sesuai contoh di plan
-    // Format: M1BAYU/MUHAMMAD MR ESMMTHQ DHXCGKID 6473 032Y007A0002 300
-    // Minimum length: 58 characters (IATA BCBP standard)
-    if barcode.len() < 58 {
-        return Err(AppError::InvalidBarcodeFormat);
-    }
-
-    // Ekstrak data sesuai format IATA BCBP
-    let passenger_name = extract_passenger_name(barcode);
-    let booking_code = extract_booking_code(barcode);
-    let origin = extract_origin(barcode);
-    let destination = extract_destination(barcode);
-    let airline_code = extract_airline_code(barcode);
-    let flight_number = extract_flight_number(barcode);
-    let flight_date_julian = extract_julian_date(barcode);
-    let cabin_class = extract_cabin_class(barcode);
-    let seat_number = extract_seat_number(barcode);
-    let sequence_number = extract_sequence_number(barcode);
-    let ticket_status = extract_ticket_status(barcode);
+    // Extract data from parsed result
+    let passenger_name = parsed.passenger_name;
+    let booking_code = parsed.booking_code;
+    let origin = parsed.origin;
+    let destination = parsed.destination;
+    let airline_code = parsed.airline_code;
+    let flight_number = parsed.flight_number.parse::<i32>().unwrap_or(0);
+    let flight_date_julian = parsed.flight_date_julian;
+    let cabin_class = parsed.cabin_class;
+    let seat_number = parsed.seat_number;
+    let sequence_number = parsed.sequence_number;
+    let ticket_status = parsed.passenger_status;
 
     let decoded = sqlx::query_as!(
         DecodedBarcode,
@@ -49,7 +46,7 @@ pub async fn decode_barcode_iata(
                   airline_code, flight_number, flight_date_julian, cabin_class, seat_number,
                   sequence_number, ticket_status, scan_data_id, created_at
         "#,
-        barcode,
+        request.barcode_value,
         passenger_name,
         booking_code,
         origin,
@@ -87,71 +84,136 @@ pub async fn get_all_decoded_barcodes(pool: &PgPool) -> Result<Vec<DecodedBarcod
     Ok(decoded_list)
 }
 
-// Helper functions untuk parsing IATA BCBP format
-fn extract_passenger_name(barcode: &str) -> String {
-    // Format: M1BAYU/MUHAMMAD MR -> MUHAMMAD BAYU (space separator, sesuai decode.json)
-    // Position 2-21 (20 characters)
-    if let Some(name_part) = barcode.get(2..22) {
-        let name = name_part.trim();
-        if let Some(slash_pos) = name.find('/') {
-            let last_name = &name[..slash_pos];
-            let first_name = &name[slash_pos+1..].trim_end_matches(" MR").trim_end_matches(" MS").trim();
-            return format!("{} {}", first_name, last_name);  // Space separator
-        }
+// NOTE: All parsing logic has been moved to shared barcode_parser module
+// This ensures 100% synchronization between mobile app and server
+
+// ==================== REJECTION LOGGING FUNCTIONS ====================
+
+/// Create a rejection log entry in server database
+pub async fn create_rejection_log(
+    pool: &PgPool,
+    log: crate::models::CreateRejectionLog,
+) -> Result<crate::models::RejectionLog, AppError> {
+    let rejection = sqlx::query_as!(
+        crate::models::RejectionLog,
+        r#"
+        INSERT INTO rejection_logs
+        (barcode_value, barcode_format, reason, expected_date, actual_date,
+         flight_number, airline, device_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, barcode_value, barcode_format, reason, expected_date, actual_date,
+                  flight_number, airline, device_id, rejected_at
+        "#,
+        log.barcode_value,
+        log.barcode_format,
+        log.reason,
+        log.expected_date,
+        log.actual_date,
+        log.flight_number,
+        log.airline,
+        log.device_id
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(rejection)
+}
+
+/// Get rejection logs with optional filtering
+pub async fn get_rejection_logs(
+    pool: &PgPool,
+    query: crate::models::RejectionLogQuery,
+) -> Result<Vec<crate::models::RejectionLog>, AppError> {
+    let limit = query.limit.unwrap_or(100);
+    let offset = query.offset.unwrap_or(0);
+
+    let mut query_builder = String::from(
+        "SELECT id, barcode_value, barcode_format, reason, expected_date, actual_date,
+                flight_number, airline, device_id, rejected_at
+         FROM rejection_logs
+         WHERE 1=1"
+    );
+
+    // Add filters
+    if query.airline.is_some() {
+        query_builder.push_str(" AND airline = $1");
     }
-    "UNKNOWN UNKNOWN".to_string()
+    if query.reason.is_some() {
+        query_builder.push_str(" AND reason LIKE $2");
+    }
+    if query.device_id.is_some() {
+        query_builder.push_str(" AND device_id = $3");
+    }
+
+    query_builder.push_str(" ORDER BY rejected_at DESC LIMIT $4 OFFSET $5");
+
+    // Execute query with parameters
+    let logs = if let (Some(airline), Some(reason), Some(device_id)) =
+        (&query.airline, &query.reason, &query.device_id) {
+        sqlx::query_as::<_, crate::models::RejectionLog>(&query_builder)
+            .bind(airline)
+            .bind(format!("%{}%", reason))
+            .bind(device_id)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?
+    } else if let (Some(airline), Some(reason)) = (&query.airline, &query.reason) {
+        sqlx::query_as::<_, crate::models::RejectionLog>(&query_builder.replace("$3", ""))
+            .bind(airline)
+            .bind(format!("%{}%", reason))
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?
+    } else if let Some(airline) = &query.airline {
+        sqlx::query_as::<_, crate::models::RejectionLog>(&query_builder.replace("$2", "").replace("$3", ""))
+            .bind(airline)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?
+    } else {
+        sqlx::query_as::<_, crate::models::RejectionLog>(
+            "SELECT id, barcode_value, barcode_format, reason, expected_date, actual_date,
+                    flight_number, airline, device_id, rejected_at
+             FROM rejection_logs
+             ORDER BY rejected_at DESC
+             LIMIT $1 OFFSET $2"
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await?
+    };
+
+    Ok(logs)
 }
 
-fn extract_booking_code(barcode: &str) -> String {
-    // PNR/Booking Reference at position 23-29 (7 characters)
-    barcode.get(23..30).unwrap_or("UNKNOWN").trim().to_string()
-}
+/// Get rejection statistics
+pub async fn get_rejection_stats(
+    pool: &PgPool,
+) -> Result<serde_json::Value, AppError> {
+    let stats = sqlx::query!(
+        r#"
+        SELECT
+            COUNT(*) as total_rejections,
+            COUNT(DISTINCT airline) as airlines_count,
+            COUNT(DISTINCT device_id) as devices_count,
+            COUNT(CASE WHEN reason LIKE '%date_mismatch%' THEN 1 END) as date_mismatch_count,
+            COUNT(CASE WHEN reason LIKE '%invalid_format%' THEN 1 END) as invalid_format_count
+        FROM rejection_logs
+        WHERE rejected_at >= NOW() - INTERVAL '30 days'
+        "#
+    )
+    .fetch_one(pool)
+    .await?;
 
-fn extract_origin(barcode: &str) -> String {
-    // Origin airport code at position 30-32 (3 characters)
-    barcode.get(30..33).unwrap_or("UNK").to_string()
-}
-
-fn extract_destination(barcode: &str) -> String {
-    // Destination airport code at position 33-35 (3 characters)
-    barcode.get(33..36).unwrap_or("UNK").to_string()
-}
-
-fn extract_airline_code(barcode: &str) -> String {
-    // Airline code at position 36-38 (2-3 characters)
-    barcode.get(36..39).unwrap_or("UN").trim().to_string()
-}
-
-fn extract_flight_number(barcode: &str) -> i32 {
-    // Flight number at position 39-43 (5 characters)
-    barcode.get(39..44)
-        .unwrap_or("0000")
-        .trim()
-        .parse::<i32>()
-        .unwrap_or(0)
-}
-
-fn extract_julian_date(barcode: &str) -> String {
-    // Julian date at position 44-46 (3 characters)
-    barcode.get(44..47).unwrap_or("000").to_string()
-}
-
-fn extract_cabin_class(barcode: &str) -> String {
-    // Cabin class at position 47 (1 character)
-    barcode.get(47..48).unwrap_or("Y").to_string()
-}
-
-fn extract_seat_number(barcode: &str) -> String {
-    // Seat number at position 48-51 (4 characters)
-    barcode.get(48..52).unwrap_or("000A").trim().to_string()
-}
-
-fn extract_sequence_number(barcode: &str) -> String {
-    // Sequence number at position 52-56 (5 characters)
-    barcode.get(52..57).unwrap_or("0000").trim().to_string()
-}
-
-fn extract_ticket_status(barcode: &str) -> String {
-    // Ticket status at position 57 (1 character)
-    barcode.get(57..58).unwrap_or("E").to_string()
+    Ok(serde_json::json!({
+        "totalRejections": stats.total_rejections.unwrap_or(0),
+        "airlinesCount": stats.airlines_count.unwrap_or(0),
+        "devicesCount": stats.devices_count.unwrap_or(0),
+        "dateMismatchCount": stats.date_mismatch_count.unwrap_or(0),
+        "invalidFormatCount": stats.invalid_format_count.unwrap_or(0),
+    }))
 }

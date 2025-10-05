@@ -4,7 +4,7 @@ use crate::{
     models::{
         ApiResponse, CreateFlight, ScanDataInput, ScanData, Flight, FlightStatistics, GetFlightsQuery,
         GetScanDataQuery, SyncFlightsQuery, UpdateFlight, DecodedBarcode, DecodeRequest,
-        GetDecodedBarcodesQuery, DecodedStatistics,
+        GetDecodedBarcodesQuery, DecodedStatistics, CreateRejectionLog, RejectionLog, RejectionLogQuery,
     },
 };
 use axum::{
@@ -271,6 +271,139 @@ pub async fn get_decoded_barcodes(
         status: "success".to_string(),
         message: None,
         data: Some(decoded_list),
+        total: None,
+    };
+    Ok(Json(response))
+}
+
+// ==================== REJECTION LOGGING HANDLERS ====================
+
+// Handler untuk membuat rejection log baru
+pub async fn create_rejection_log(
+    State(pool): State<PgPool>,
+    Json(payload): Json<CreateRejectionLog>,
+) -> Result<(StatusCode, Json<ApiResponse<RejectionLog>>), AppError> {
+    tracing::info!(
+        barcode_format = %payload.barcode_format,
+        reason = %payload.reason,
+        airline = ?payload.airline,
+        "Creating rejection log"
+    );
+
+    if let Err(validation_errors) = payload.validate() {
+        tracing::error!(
+            errors = ?validation_errors.field_errors(),
+            "Rejection log validation failed"
+        );
+        return Err(AppError::ValidationError(validation_errors));
+    }
+
+    let rejection = database::create_rejection_log(&pool, payload).await?;
+
+    tracing::info!(
+        rejection_id = rejection.id,
+        "Rejection log created successfully"
+    );
+
+    let response = ApiResponse {
+        status: "success".to_string(),
+        message: Some("Rejection log saved successfully".to_string()),
+        data: Some(rejection),
+        total: None,
+    };
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+// Handler untuk mendapatkan rejection logs dengan filtering
+pub async fn get_rejection_logs(
+    State(pool): State<PgPool>,
+    Query(query): Query<RejectionLogQuery>,
+) -> Result<Json<ApiResponse<Vec<RejectionLog>>>, AppError> {
+    let logs = database::get_rejection_logs(&pool, query).await?;
+    let response = ApiResponse {
+        status: "success".to_string(),
+        message: None,
+        data: Some(logs),
+        total: None,
+    };
+    Ok(Json(response))
+}
+
+// Handler untuk mendapatkan rejection statistics
+pub async fn get_rejection_stats(
+    State(pool): State<PgPool>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let stats = database::get_rejection_stats(&pool).await?;
+    Ok(Json(stats))
+}
+
+// ============= Translation/Code Mapping Handlers =============
+
+// Handler untuk mendapatkan airport codes
+pub async fn get_airport_codes(
+    State(pool): State<PgPool>,
+) -> Result<Json<ApiResponse<Vec<crate::models::AirportCode>>>, AppError> {
+    let codes = database::get_airport_codes(&pool).await?;
+    let response = ApiResponse {
+        status: "success".to_string(),
+        message: None,
+        data: Some(codes),
+        total: None,
+    };
+    Ok(Json(response))
+}
+
+// Handler untuk mendapatkan airline codes
+pub async fn get_airline_codes(
+    State(pool): State<PgPool>,
+) -> Result<Json<ApiResponse<Vec<crate::models::AirlineCode>>>, AppError> {
+    let codes = database::get_airline_codes(&pool).await?;
+    let response = ApiResponse {
+        status: "success".to_string(),
+        message: None,
+        data: Some(codes),
+        total: None,
+    };
+    Ok(Json(response))
+}
+
+// Handler untuk mendapatkan cabin class codes
+pub async fn get_cabin_class_codes(
+    State(pool): State<PgPool>,
+) -> Result<Json<ApiResponse<Vec<crate::models::CabinClassCode>>>, AppError> {
+    let codes = database::get_cabin_class_codes(&pool).await?;
+    let response = ApiResponse {
+        status: "success".to_string(),
+        message: None,
+        data: Some(codes),
+        total: None,
+    };
+    Ok(Json(response))
+}
+
+// Handler untuk mendapatkan passenger status codes
+pub async fn get_passenger_status_codes(
+    State(pool): State<PgPool>,
+) -> Result<Json<ApiResponse<Vec<crate::models::PassengerStatusCode>>>, AppError> {
+    let codes = database::get_passenger_status_codes(&pool).await?;
+    let response = ApiResponse {
+        status: "success".to_string(),
+        message: None,
+        data: Some(codes),
+        total: None,
+    };
+    Ok(Json(response))
+}
+
+// Handler untuk mendapatkan starter data version
+pub async fn get_starter_data_version(
+    State(pool): State<PgPool>,
+) -> Result<Json<ApiResponse<crate::models::StarterDataVersion>>, AppError> {
+    let version = database::get_starter_data_version(&pool).await?;
+    let response = ApiResponse {
+        status: "success".to_string(),
+        message: None,
+        data: Some(version),
         total: None,
     };
     Ok(Json(response))

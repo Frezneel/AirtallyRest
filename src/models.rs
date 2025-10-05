@@ -109,7 +109,7 @@ pub struct CreateFlight {
     pub destination: String,
     #[validate(regex(
         path = "*crate::models::GATE_REGEX", // Dereferensi untuk validator
-        message = "Gate format must be A1-Z99"
+        message = "Gate format must be A1-Z99 or TBD"
     ))]
     pub gate: String,
     pub device_id: Option<String>,
@@ -132,7 +132,7 @@ pub struct UpdateFlight {
     pub destination: Option<String>,
     #[validate(regex(
         path = "*crate::models::GATE_REGEX", // Dereferensi untuk validator
-        message = "Gate format must be A1-Z99"
+        message = "Gate format must be A1-Z99 or TBD"
     ))]
     pub gate: Option<String>,
     pub is_active: Option<bool>,
@@ -294,6 +294,110 @@ pub struct DecodeRequest {
 }
 
 // Regex untuk validasi format gate
+// Allows: A1-Z99 OR TBD (To Be Determined)
 lazy_static::lazy_static! {
-    pub static ref GATE_REGEX: regex::Regex = regex::Regex::new(r"^[A-Z]\d{1,2}$").unwrap();
+    pub static ref GATE_REGEX: regex::Regex = regex::Regex::new(r"^([A-Z]\d{1,2}|TBD)$").unwrap();
+}
+
+// Model untuk tabel rejection_logs (server-side rejection tracking)
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct RejectionLog {
+    pub id: i32,
+    pub barcode_value: String,
+    pub barcode_format: String,
+    pub reason: String,
+    pub expected_date: Option<String>,
+    pub actual_date: Option<String>,
+    pub flight_number: Option<String>,
+    pub airline: Option<String>,
+    pub device_id: Option<String>,
+    pub rejected_at: DateTime<Utc>,
+}
+
+// Model untuk input rejection log
+#[derive(Debug, Deserialize, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateRejectionLog {
+    #[validate(length(min = 1))]
+    pub barcode_value: String,
+    #[validate(length(min = 1))]
+    pub barcode_format: String,
+    #[validate(length(min = 1))]
+    pub reason: String,
+    pub expected_date: Option<String>,
+    pub actual_date: Option<String>,
+    pub flight_number: Option<String>,
+    pub airline: Option<String>,
+    pub device_id: Option<String>,
+}
+
+// Query parameters untuk filtering rejection logs
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RejectionLogQuery {
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+    pub airline: Option<String>,
+    pub reason: Option<String>,
+    pub device_id: Option<String>,
+}
+
+// ============= Translation/Code Mapping Models =============
+
+// Model untuk airport codes
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct AirportCode {
+    pub id: i32,
+    pub code: String,
+    pub name: String,
+    pub city: String,
+    pub country: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+// Model untuk airline codes
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct AirlineCode {
+    pub id: i32,
+    pub code: String,
+    pub name: String,
+    pub country: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+// Model untuk cabin class codes
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct CabinClassCode {
+    pub id: i32,
+    pub code: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+// Model untuk passenger status codes
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct PassengerStatusCode {
+    pub id: i32,
+    pub code: String,
+    pub description: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+// Model untuk starter data version tracking
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct StarterDataVersion {
+    pub id: i32,
+    pub version: i32,
+    pub updated_at: DateTime<Utc>,
 }
