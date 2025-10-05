@@ -12,6 +12,7 @@ mod handlers;
 mod middleware;
 mod models;
 mod router;
+mod barcode_parser;  // Shared IATA BCBP parser (synchronized with mobile app)
 
 #[tokio::main]
 async fn main() {

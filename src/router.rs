@@ -28,6 +28,15 @@ pub fn create_router(db_pool: PgPool) -> Router {
         // Rute untuk Sinkronisasi
         .route("/api/sync/flights", get(handlers::sync_flights))
         .route("/api/sync/flights/bulk", post(handlers::sync_flights_bulk))
+        // Rute untuk Rejection Logging
+        .route("/api/rejection-logs", get(handlers::get_rejection_logs).post(handlers::create_rejection_log))
+        .route("/api/rejection-logs/stats", get(handlers::get_rejection_stats))
+        // Rute untuk Translation/Code Mapping
+        .route("/api/codes/airports", get(handlers::get_airport_codes))
+        .route("/api/codes/airlines", get(handlers::get_airline_codes))
+        .route("/api/codes/classes", get(handlers::get_cabin_class_codes))
+        .route("/api/codes/status", get(handlers::get_passenger_status_codes))
+        .route("/api/starter-data/version", get(handlers::get_starter_data_version))
         // Menyediakan state (koneksi database) ke semua handler
         .with_state(db_pool)
         // Tambahkan logging middleware untuk mencatat semua request/response termasuk 4xx errors

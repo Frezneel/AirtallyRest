@@ -1,0 +1,106 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT db.id, db.barcode_value, db.passenger_name, db.booking_code, db.origin, db.destination,\n                   db.airline_code, db.flight_number, db.flight_date_julian, db.cabin_class, db.seat_number,\n                   db.sequence_number, db.ticket_status, db.scan_data_id, db.created_at\n            FROM decode_barcode db\n            JOIN scan_data sd ON db.scan_data_id = sd.id\n            WHERE sd.flight_id = $1\n            ORDER BY db.created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "barcode_value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "passenger_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "booking_code",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "origin",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "destination",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "airline_code",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "flight_number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "flight_date_julian",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "cabin_class",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "seat_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "sequence_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "ticket_status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 13,
+        "name": "scan_data_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "6b0c230d931514d681ed1b37d177cf432069b30e387754a938ec4defad30ad3f"
+}
