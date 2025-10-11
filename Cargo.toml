@@ -4,18 +4,43 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Web framework
 axum = "0.8.4"
 tokio = { version = "1.47.0", features = ["full"] }
 http-body-util = "0.1"
+
+# Serialization
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
+
+# Database
 sqlx = { version = "0.8.5", features = ["runtime-tokio-rustls", "postgres", "chrono"] }
+
+# Date/Time
 chrono = { version = "0.4.41", features = ["serde"] }
+
+# Configuration
 dotenvy = "0.15.6"
+config = "0.14"
+
+# Validation
 validator = { version = "0.20.0", features = ["derive"] }
+
+# Logging
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 tracing-appender = "0.2.3"
-tower-http = { version = "0.6.6", features = ["cors", "trace"] }
+
+# Middleware & Extensions
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tower = { version = "0.5", features = ["full"] }
+# tower_governor = { version = "0.4", features = [] } # TODO: Add when compatibility is resolved
+
+# OpenAPI/Swagger documentation
+utoipa = { version = "5.4", features = ["axum_extras", "chrono"] }
+utoipa-axum = "0.1"
+utoipa-swagger-ui = { version = "9.0", features = ["axum"] }
+
+# Utilities
 regex = "1.11.3"
 lazy_static = "1.5"

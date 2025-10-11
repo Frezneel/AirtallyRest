@@ -32,7 +32,7 @@ pub async fn decode_barcode_iata(
     let cabin_class = parsed.cabin_class;
     let seat_number = parsed.seat_number;
     let sequence_number = parsed.sequence_number;
-    let ticket_status = parsed.passenger_status;
+    let infant_status = parsed.infant_status;
 
     let decoded = sqlx::query_as!(
         DecodedBarcode,
@@ -40,11 +40,11 @@ pub async fn decode_barcode_iata(
         INSERT INTO decode_barcode
         (barcode_value, passenger_name, booking_code, origin, destination, airline_code,
          flight_number, flight_date_julian, cabin_class, seat_number, sequence_number,
-         ticket_status, scan_data_id)
+         infant_status, scan_data_id)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING id, barcode_value, passenger_name, booking_code, origin, destination,
                   airline_code, flight_number, flight_date_julian, cabin_class, seat_number,
-                  sequence_number, ticket_status, scan_data_id, created_at
+                  sequence_number, infant_status, scan_data_id, created_at
         "#,
         request.barcode_value,
         passenger_name,
@@ -57,7 +57,7 @@ pub async fn decode_barcode_iata(
         cabin_class,
         seat_number,
         sequence_number,
-        ticket_status,
+        infant_status,
         request.scan_data_id
     )
     .fetch_one(pool)
@@ -73,7 +73,7 @@ pub async fn get_all_decoded_barcodes(pool: &PgPool) -> Result<Vec<DecodedBarcod
         r#"
         SELECT id, barcode_value, passenger_name, booking_code, origin, destination,
                airline_code, flight_number, flight_date_julian, cabin_class, seat_number,
-               sequence_number, ticket_status, scan_data_id, created_at
+               sequence_number, infant_status, scan_data_id, created_at
         FROM decode_barcode
         ORDER BY created_at DESC
         "#

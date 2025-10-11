@@ -381,20 +381,6 @@ pub async fn get_cabin_class_codes(
     Ok(Json(response))
 }
 
-// Handler untuk mendapatkan passenger status codes
-pub async fn get_passenger_status_codes(
-    State(pool): State<PgPool>,
-) -> Result<Json<ApiResponse<Vec<crate::models::PassengerStatusCode>>>, AppError> {
-    let codes = database::get_passenger_status_codes(&pool).await?;
-    let response = ApiResponse {
-        status: "success".to_string(),
-        message: None,
-        data: Some(codes),
-        total: None,
-    };
-    Ok(Json(response))
-}
-
 // Handler untuk mendapatkan starter data version
 pub async fn get_starter_data_version(
     State(pool): State<PgPool>,
