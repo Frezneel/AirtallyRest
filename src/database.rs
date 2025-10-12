@@ -12,12 +12,17 @@ use sqlx::PgPool;
 
 // Fungsi untuk membuat penerbangan baru di database
 pub async fn create_flight(pool: &PgPool, flight: CreateFlight) -> Result<Flight, AppError> {
-    // Validasi tambahan: departure_time tidak boleh di masa lalu
-    let now_local = Local::now().date_naive();
-    let departure_date_local = flight.departure_time.with_timezone(&Local).date_naive();
-    let day_diff = (departure_date_local - now_local).num_days();
+    // Validasi: departure_time harus sama dengan tanggal scan (scanned_at)
+    let scan_date = flight.scanned_at.with_timezone(&Local).date_naive();
+    let departure_date = flight.departure_time.with_timezone(&Local).date_naive();
 
-    if day_diff >= 1 || day_diff <=-1 {
+    if departure_date != scan_date {
+        tracing::error!(
+            scan_date = %scan_date,
+            departure_date = %departure_date,
+            flight_number = %flight.flight_number,
+            "Departure date must match scan date"
+        );
         return Err(AppError::InvalidDepartureTime);
     }
 
@@ -37,17 +42,60 @@ pub async fn create_flight(pool: &PgPool, flight: CreateFlight) -> Result<Flight
         flight.device_id
     )
         .fetch_one(pool)
-        .await
-        .map_err(|e| {
-            if let sqlx::Error::Database(db_err) = &e
-                && db_err.constraint() == Some("idx_unique_flight_per_day")
-            {
-                return AppError::DuplicateFlight;
-            }
-            AppError::DatabaseError(e)
-        })?;
+        .await;
 
-    Ok(new_flight)
+    // Handle duplicate flight: return existing flight instead of error (idempotent behavior)
+    match new_flight {
+        Ok(flight) => Ok(flight),
+        Err(e) => {
+            if let sqlx::Error::Database(db_err) = &e {
+                if db_err.constraint() == Some("idx_unique_flight_per_day") {
+                    tracing::info!(
+                        flight_number = %flight.flight_number,
+                        departure_date = %departure_date,
+                        "Flight already exists, returning existing flight (idempotent)"
+                    );
+
+                    // Get and return existing flight
+                    let existing = get_flight_by_number_and_date(
+                        pool,
+                        &flight.flight_number,
+                        departure_date,
+                    )
+                    .await?
+                    .ok_or(AppError::FlightNotFound)?;
+
+                    return Ok(existing);
+                }
+            }
+            Err(AppError::DatabaseError(e))
+        }
+    }
+}
+
+// Fungsi untuk mengambil penerbangan berdasarkan nomor penerbangan dan tanggal (untuk handling duplicate)
+pub async fn get_flight_by_number_and_date(
+    pool: &PgPool,
+    flight_number: &str,
+    date: NaiveDate,
+) -> Result<Option<Flight>, AppError> {
+    let flight = sqlx::query_as!(
+        Flight,
+        r#"
+        SELECT id, flight_number, airline, aircraft, departure_time,
+               destination, gate, is_active, created_at, updated_at, device_id
+        FROM flights
+        WHERE flight_number = $1
+          AND (departure_time AT TIME ZONE 'utc')::date = $2
+          AND is_active = true
+        "#,
+        flight_number,
+        date
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(flight)
 }
 
 // Fungsi untuk mengambil semua penerbangan, dengan filter tanggal opsional
@@ -219,13 +267,13 @@ pub async fn get_decoded_statistics(
     .fetch_one(pool)
     .await?;
 
-    // Count valid tickets (status '0' or '3')
-    let valid_tickets: (i64,) = sqlx::query_as(
+    // Count infant passengers
+    let infant_count: (i64,) = sqlx::query_as(
         r#"
         SELECT COUNT(*)
         FROM decode_barcode db
         JOIN scan_data sd ON db.scan_data_id = sd.id
-        WHERE sd.flight_id = $1 AND db.ticket_status IN ('0', '3')
+        WHERE sd.flight_id = $1 AND db.infant_status = true
         "#,
     )
     .bind(flight_id)
@@ -236,8 +284,8 @@ pub async fn get_decoded_statistics(
         flight_id,
         flight_number: flight.flight_number,
         total_decoded: total_decoded.0,
-        valid_tickets: valid_tickets.0,
-        invalid_tickets: total_decoded.0 - valid_tickets.0,
+        infant_count: infant_count.0,
+        adult_count: total_decoded.0 - infant_count.0,
     })
 }
 
@@ -384,7 +432,7 @@ pub async fn decode_barcode_iata(
     let cabin_class = parsed.cabin_class;
     let seat_number = parsed.seat_number;
     let sequence_number = parsed.sequence_number;
-    let ticket_status = parsed.passenger_status;
+    let infant_status = parsed.infant_status;
 
     let decoded = sqlx::query_as!(
         DecodedBarcode,
@@ -392,11 +440,11 @@ pub async fn decode_barcode_iata(
         INSERT INTO decode_barcode
         (barcode_value, passenger_name, booking_code, origin, destination, airline_code,
          flight_number, flight_date_julian, cabin_class, seat_number, sequence_number,
-         ticket_status, scan_data_id)
+         infant_status, scan_data_id)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING id, barcode_value, passenger_name, booking_code, origin, destination,
                   airline_code, flight_number, flight_date_julian, cabin_class, seat_number,
-                  sequence_number, ticket_status, scan_data_id, created_at
+                  sequence_number, infant_status, scan_data_id, created_at
         "#,
         request.barcode_value,
         passenger_name,
@@ -409,7 +457,7 @@ pub async fn decode_barcode_iata(
         cabin_class,
         seat_number,
         sequence_number,
-        ticket_status,
+        infant_status,
         request.scan_data_id
     )
     .fetch_one(pool)
@@ -430,7 +478,7 @@ pub async fn get_all_decoded_barcodes(
             r#"
             SELECT db.id, db.barcode_value, db.passenger_name, db.booking_code, db.origin, db.destination,
                    db.airline_code, db.flight_number, db.flight_date_julian, db.cabin_class, db.seat_number,
-                   db.sequence_number, db.ticket_status, db.scan_data_id, db.created_at
+                   db.sequence_number, db.infant_status, db.scan_data_id, db.created_at
             FROM decode_barcode db
             JOIN scan_data sd ON db.scan_data_id = sd.id
             WHERE sd.flight_id = $1
@@ -447,7 +495,7 @@ pub async fn get_all_decoded_barcodes(
             r#"
             SELECT id, barcode_value, passenger_name, booking_code, origin, destination,
                    airline_code, flight_number, flight_date_julian, cabin_class, seat_number,
-                   sequence_number, ticket_status, scan_data_id, created_at
+                   sequence_number, infant_status, scan_data_id, created_at
             FROM decode_barcode
             ORDER BY created_at DESC
             "#
@@ -646,26 +694,6 @@ pub async fn get_cabin_class_codes(
                created_at as "created_at!",
                updated_at as "updated_at!"
         FROM cabin_class_codes
-        ORDER BY code
-        "#
-    )
-    .fetch_all(pool)
-    .await?;
-
-    Ok(codes)
-}
-
-/// Get all passenger status codes
-pub async fn get_passenger_status_codes(
-    pool: &PgPool,
-) -> Result<Vec<crate::models::PassengerStatusCode>, AppError> {
-    let codes = sqlx::query_as!(
-        crate::models::PassengerStatusCode,
-        r#"
-        SELECT id, code, description,
-               created_at as "created_at!",
-               updated_at as "updated_at!"
-        FROM passenger_status_codes
         ORDER BY code
         "#
     )

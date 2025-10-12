@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize, Deserializer};
 use validator::Validate;
+use utoipa::ToSchema;
 
 // Custom deserializer untuk DateTime yang lebih fleksibel
 fn deserialize_flexible_datetime<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
@@ -77,7 +78,7 @@ where
 }
 
 // Model utama untuk tabel `flights` yang sesuai dengan skema database
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Flight {
     pub id: i32,
@@ -105,6 +106,8 @@ pub struct CreateFlight {
     pub aircraft: String,
     #[serde(deserialize_with = "deserialize_flexible_datetime")]
     pub departure_time: DateTime<Utc>,
+    #[serde(deserialize_with = "deserialize_flexible_datetime")]
+    pub scanned_at: DateTime<Utc>,
     #[validate(length(equal = 3))]
     pub destination: String,
     #[validate(regex(
@@ -175,7 +178,7 @@ pub struct ScanDataInput {
 }
 
 // ...dan satu lagi untuk representasi data di database (ScanData)
-#[derive(Debug, Serialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanData {
     pub id: i32,
@@ -233,8 +236,8 @@ pub struct DecodedStatistics {
     pub flight_id: i32,
     pub flight_number: String,
     pub total_decoded: i64,
-    pub valid_tickets: i64,
-    pub invalid_tickets: i64,
+    pub infant_count: i64,
+    pub adult_count: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
@@ -264,7 +267,7 @@ pub struct ApiResponse<T> {
 }
 
 // Model untuk tabel decode_barcode (sesuai dengan decode.json)
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DecodedBarcode {
     pub id: i32,
@@ -279,7 +282,7 @@ pub struct DecodedBarcode {
     pub cabin_class: String,
     pub seat_number: String,
     pub sequence_number: String,
-    pub ticket_status: String,
+    pub infant_status: bool,
     pub scan_data_id: Option<i32>,
     pub created_at: DateTime<Utc>,
 }
@@ -300,7 +303,7 @@ lazy_static::lazy_static! {
 }
 
 // Model untuk tabel rejection_logs (server-side rejection tracking)
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RejectionLog {
     pub id: i32,
@@ -346,7 +349,7 @@ pub struct RejectionLogQuery {
 // ============= Translation/Code Mapping Models =============
 
 // Model untuk airport codes
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AirportCode {
     pub id: i32,
@@ -359,7 +362,7 @@ pub struct AirportCode {
 }
 
 // Model untuk airline codes
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AirlineCode {
     pub id: i32,
@@ -371,24 +374,13 @@ pub struct AirlineCode {
 }
 
 // Model untuk cabin class codes
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CabinClassCode {
     pub id: i32,
     pub code: String,
     pub name: String,
     pub description: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-// Model untuk passenger status codes
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
-#[serde(rename_all = "camelCase")]
-pub struct PassengerStatusCode {
-    pub id: i32,
-    pub code: String,
-    pub description: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

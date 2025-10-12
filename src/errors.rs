@@ -8,6 +8,7 @@ use validator::ValidationErrors;
 
 // Enum untuk menangani berbagai jenis error di aplikasi
 #[derive(Debug)]
+#[allow(dead_code)] // Some variants are reserved for future use
 pub enum AppError {
     DatabaseError(sqlx::Error),
     ValidationError(ValidationErrors),
