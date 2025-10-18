@@ -95,7 +95,7 @@ pub struct Flight {
 }
 
 // Model untuk membuat penerbangan baru (Request Body)
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateFlight {
     #[validate(length(min = 3, max = 10))]
@@ -119,7 +119,7 @@ pub struct CreateFlight {
 }
 
 // Model untuk memperbarui penerbangan (Request Body)
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateFlight {
     #[validate(length(min = 2, max = 100))]
@@ -163,7 +163,7 @@ where
 }
 
 // Struct DIPISAH: Satu untuk input dari user (ScanDataInput)...
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanDataInput {
     #[validate(length(min = 1))]
@@ -217,7 +217,7 @@ pub struct SyncFlightsQuery {
 }
 
 // Struktur untuk response statistik
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FlightStatistics {
     pub flight_id: i32,
@@ -230,7 +230,7 @@ pub struct FlightStatistics {
 }
 
 // Struktur untuk response decoded barcode statistics
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DecodedStatistics {
     pub flight_id: i32,
@@ -240,14 +240,14 @@ pub struct DecodedStatistics {
     pub adult_count: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScansByHour {
     pub hour: String,
     pub count: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TopDevice {
     pub device_id: String,
@@ -288,7 +288,7 @@ pub struct DecodedBarcode {
 }
 
 // Model untuk input decode barcode
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DecodeRequest {
     #[validate(length(min = 1))]
@@ -319,7 +319,7 @@ pub struct RejectionLog {
 }
 
 // Model untuk input rejection log
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateRejectionLog {
     #[validate(length(min = 1))]
