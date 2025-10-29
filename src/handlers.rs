@@ -1,5 +1,6 @@
 use crate::{
     database,
+    database_config::health_check,
     errors::AppError,
     models::{
         ApiResponse, CreateFlight, ScanDataInput, ScanData, Flight, FlightStatistics, GetFlightsQuery,
@@ -632,4 +633,42 @@ pub async fn get_starter_data_version(
         total: None,
     };
     Ok(Json(response))
+}
+
+// ==================== HEALTH CHECK HANDLER ====================
+
+/// Health check endpoint
+///
+/// Returns system health status including:
+/// - Database connectivity
+/// - Response time
+/// - Connection pool status
+/// - System uptime
+///
+/// This endpoint does not require authentication
+/// and can be used by monitoring systems.
+pub async fn health_check(
+    State(pool): State<PgPool>,
+) -> Result<(StatusCode, Json<serde_json::Value>), AppError> {
+    let health_info = health_check(&pool).await;
+    let status_code = StatusCode::from_u16(health_info.status_code())
+        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
+    let response = serde_json::json!({
+        "status": if health_info.is_healthy { "healthy" } else { "unhealthy" },
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "database": {
+            "is_healthy": health_info.is_healthy,
+            "response_time_ms": health_info.response_time.as_millis(),
+            "active_connections": health_info.active_connections,
+            "idle_connections": health_info.idle_connections
+        },
+        "api": {
+            "version": env!("CARGO_PKG_VERSION", "unknown"),
+            "environment": std::env::var("ENVIRONMENT").unwrap_or_else(|_| "unknown".to_string())
+        },
+        "error": health_info.error
+    });
+
+    Ok((status_code, Json(response)))
 }

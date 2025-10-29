@@ -20,6 +20,8 @@ use utoipa_swagger_ui::SwaggerUi;
 /// Configured Axum router with all API routes
 pub fn create_router(db_pool: PgPool, enable_swagger: bool) -> Router {
     let mut router = Router::new()
+        // Health check endpoint (no auth required)
+        .route("/health", get(handlers::health_check))
         // Rute untuk Manajemen Penerbangan
         .route("/api/flights", get(handlers::get_flights).post(handlers::create_flight))
         .route(
