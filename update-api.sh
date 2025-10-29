@@ -171,7 +171,8 @@ echo ""
 print_step 6 $TOTAL_STEPS "Building application (this may take several minutes)"
 
 source $HOME/.cargo/env
-cargo build --release
+# Use SQLx offline mode (doesn't require database connection during build)
+SQLX_OFFLINE=true cargo build --release
 
 if [ -f "$APP_DIR/target/release/airtally-rest" ]; then
     print_success "Build completed"
