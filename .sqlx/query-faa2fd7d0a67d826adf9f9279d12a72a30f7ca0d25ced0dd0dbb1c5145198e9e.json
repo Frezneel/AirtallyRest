@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, flight_number, airline, aircraft, departure_time,\n               destination, gate, is_active, created_at, updated_at, device_id\n        FROM flights\n        WHERE flight_number = $1\n          AND (departure_time AT TIME ZONE 'utc')::date = $2\n          AND is_active = true\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "flight_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "airline",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "aircraft",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "departure_time",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "destination",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "gate",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "device_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "faa2fd7d0a67d826adf9f9279d12a72a30f7ca0d25ced0dd0dbb1c5145198e9e"
+}

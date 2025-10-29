@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO rejection_logs\n        (barcode_value, barcode_format, reason, expected_date, actual_date,\n         flight_number, airline, device_id)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n        RETURNING id, barcode_value, barcode_format, reason, expected_date, actual_date,\n                  flight_number, airline, device_id, rejected_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "barcode_value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "barcode_format",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "expected_date",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "actual_date",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "flight_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "airline",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "device_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "rejected_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "8b75aa79760f9e2e6b1607fc09710c67d1f04eaedce161ef4c30c64fc40cfae9"
+}
