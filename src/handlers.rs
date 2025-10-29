@@ -6,6 +6,7 @@ use crate::{
         ApiResponse, CreateFlight, ScanDataInput, ScanData, Flight, FlightStatistics, GetFlightsQuery,
         GetScanDataQuery, SyncFlightsQuery, UpdateFlight, DecodedBarcode, DecodeRequest,
         GetDecodedBarcodesQuery, DecodedStatistics, CreateRejectionLog, RejectionLog, RejectionLogQuery,
+        AirportCode, AirlineCode, CabinClassCode,
     },
 };
 use axum::{
@@ -16,7 +17,20 @@ use axum::{
 use sqlx::PgPool;
 use validator::Validate;
 
-// Handler untuk membuat penerbangan baru
+// ==================== FLIGHT MANAGEMENT HANDLERS ====================
+
+/// Create a new flight
+#[utoipa::path(
+    post,
+    path = "/api/flights",
+    tag = "Flights",
+    request_body = CreateFlight,
+    responses(
+        (status = 201, description = "Flight created successfully", body = Flight),
+        (status = 400, description = "Validation error"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn create_flight(
     State(pool): State<PgPool>,
     Json(payload): Json<CreateFlight>,
@@ -55,7 +69,19 @@ pub async fn create_flight(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-// Handler untuk mendapatkan daftar penerbangan (dengan filter tanggal opsional)
+/// Get all flights with optional date filter
+#[utoipa::path(
+    get,
+    path = "/api/flights",
+    tag = "Flights",
+    params(
+        ("date" = Option<String>, Query, description = "Filter by date (YYYY-MM-DD)")
+    ),
+    responses(
+        (status = 200, description = "List of flights", body = Vec<Flight>),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_flights(
     State(pool): State<PgPool>,
     Query(query): Query<GetFlightsQuery>,
@@ -70,7 +96,20 @@ pub async fn get_flights(
     Ok(Json(response))
 }
 
-// Handler untuk mendapatkan penerbangan berdasarkan ID
+/// Get flight by ID
+#[utoipa::path(
+    get,
+    path = "/api/flights/{id}",
+    tag = "Flights",
+    params(
+        ("id" = i32, Path, description = "Flight ID")
+    ),
+    responses(
+        (status = 200, description = "Flight details", body = Flight),
+        (status = 404, description = "Flight not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_flight_by_id(
     State(pool): State<PgPool>,
     Path(id): Path<i32>,
@@ -85,7 +124,22 @@ pub async fn get_flight_by_id(
     Ok(Json(response))
 }
 
-// Handler untuk memperbarui penerbangan
+/// Update flight by ID
+#[utoipa::path(
+    put,
+    path = "/api/flights/{id}",
+    tag = "Flights",
+    params(
+        ("id" = i32, Path, description = "Flight ID")
+    ),
+    request_body = UpdateFlight,
+    responses(
+        (status = 200, description = "Flight updated successfully", body = Flight),
+        (status = 400, description = "Validation error"),
+        (status = 404, description = "Flight not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn update_flight(
     State(pool): State<PgPool>,
     Path(id): Path<i32>,
@@ -102,7 +156,20 @@ pub async fn update_flight(
     Ok(Json(response))
 }
 
-// Handler untuk menghapus penerbangan (soft delete)
+/// Delete flight by ID (soft delete)
+#[utoipa::path(
+    delete,
+    path = "/api/flights/{id}",
+    tag = "Flights",
+    params(
+        ("id" = i32, Path, description = "Flight ID")
+    ),
+    responses(
+        (status = 204, description = "Flight deleted successfully"),
+        (status = 404, description = "Flight not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn delete_flight(
     State(pool): State<PgPool>,
     Path(id): Path<i32>,
@@ -111,7 +178,20 @@ pub async fn delete_flight(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// Handler untuk mendapatkan statistik scan penerbangan
+/// Get flight scan statistics
+#[utoipa::path(
+    get,
+    path = "/api/flights/{id}/statistics",
+    tag = "Flights",
+    params(
+        ("id" = i32, Path, description = "Flight ID")
+    ),
+    responses(
+        (status = 200, description = "Flight scan statistics", body = FlightStatistics),
+        (status = 404, description = "Flight not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_flight_statistics(
     State(pool): State<PgPool>,
     Path(id): Path<i32>,
@@ -126,7 +206,20 @@ pub async fn get_flight_statistics(
     Ok(Json(response))
 }
 
-// Handler untuk mendapatkan statistik decoded barcodes per penerbangan
+/// Get decoded barcode statistics for flight
+#[utoipa::path(
+    get,
+    path = "/api/flights/{id}/decoded-statistics",
+    tag = "Flights",
+    params(
+        ("id" = i32, Path, description = "Flight ID")
+    ),
+    responses(
+        (status = 200, description = "Decoded barcode statistics", body = DecodedStatistics),
+        (status = 404, description = "Flight not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_decoded_statistics(
     State(pool): State<PgPool>,
     Path(id): Path<i32>,
@@ -141,7 +234,20 @@ pub async fn get_decoded_statistics(
     Ok(Json(response))
 }
 
-// Handler untuk membuat data scan baru
+// ==================== SCANNING HANDLERS ====================
+
+/// Create new scan data
+#[utoipa::path(
+    post,
+    path = "/api/scan-data",
+    tag = "Scanning",
+    request_body = ScanDataInput,
+    responses(
+        (status = 201, description = "Scan data created successfully", body = ScanData),
+        (status = 400, description = "Validation error"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn create_scan(
     State(pool): State<PgPool>,
     Json(payload): Json<ScanDataInput>,
@@ -178,7 +284,20 @@ pub async fn create_scan(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-// Handler untuk mendapatkan data scan dengan filter
+/// Get scan data with filters
+#[utoipa::path(
+    get,
+    path = "/api/scan-data",
+    tag = "Scanning",
+    params(
+        ("flight_id" = Option<i32>, Query, description = "Filter by flight ID"),
+        ("date_range" = Option<String>, Query, description = "Date range filter (start,end)")
+    ),
+    responses(
+        (status = 200, description = "List of scan data", body = Vec<ScanData>),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_scan_data(
     State(pool): State<PgPool>,
     Query(query): Query<GetScanDataQuery>,
@@ -193,7 +312,75 @@ pub async fn get_scan_data(
     Ok(Json(response))
 }
 
-// Handler untuk sinkronisasi incremental
+/// Decode barcode (IATA BCBP format)
+#[utoipa::path(
+    post,
+    path = "/api/decode-barcode",
+    tag = "Scanning",
+    request_body = DecodeRequest,
+    responses(
+        (status = 201, description = "Barcode decoded successfully", body = DecodedBarcode),
+        (status = 400, description = "Invalid barcode format"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn decode_barcode(
+    State(pool): State<PgPool>,
+    Json(payload): Json<DecodeRequest>,
+) -> Result<(StatusCode, Json<ApiResponse<DecodedBarcode>>), AppError> {
+    payload.validate()?;
+    let decoded = database::decode_barcode_iata(&pool, payload).await?;
+    let response = ApiResponse {
+        status: "success".to_string(),
+        message: Some("Barcode decoded successfully".to_string()),
+        data: Some(decoded),
+        total: None,
+    };
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+/// Get all decoded barcodes with optional flight filter
+#[utoipa::path(
+    get,
+    path = "/api/decoded-barcodes",
+    tag = "Scanning",
+    params(
+        ("flight_id" = Option<i32>, Query, description = "Filter by flight ID")
+    ),
+    responses(
+        (status = 200, description = "List of decoded barcodes", body = Vec<DecodedBarcode>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_decoded_barcodes(
+    State(pool): State<PgPool>,
+    Query(query): Query<GetDecodedBarcodesQuery>,
+) -> Result<Json<ApiResponse<Vec<DecodedBarcode>>>, AppError> {
+    let decoded_list = database::get_all_decoded_barcodes(&pool, query.flight_id).await?;
+    let response = ApiResponse {
+        status: "success".to_string(),
+        message: None,
+        data: Some(decoded_list),
+        total: None,
+    };
+    Ok(Json(response))
+}
+
+// ==================== SYNC HANDLERS ====================
+
+/// Incremental flight synchronization
+#[utoipa::path(
+    get,
+    path = "/api/sync/flights",
+    tag = "Sync",
+    params(
+        ("last_sync" = Option<String>, Query, description = "Last sync timestamp (ISO 8601)")
+    ),
+    responses(
+        (status = 200, description = "Updated flights since last sync", body = Vec<Flight>),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn sync_flights(
     State(pool): State<PgPool>,
     Query(query): Query<SyncFlightsQuery>,
@@ -208,7 +395,18 @@ pub async fn sync_flights(
     Ok(Json(response))
 }
 
-// Handler untuk sinkronisasi bulk
+/// Bulk flight synchronization
+#[utoipa::path(
+    post,
+    path = "/api/sync/flights/bulk",
+    tag = "Sync",
+    request_body = Vec<CreateFlight>,
+    responses(
+        (status = 201, description = "Flights synced successfully"),
+        (status = 400, description = "Validation error"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn sync_flights_bulk(
     State(pool): State<PgPool>,
     Json(payload): Json<Vec<CreateFlight>>,
@@ -246,40 +444,20 @@ pub async fn sync_flights_bulk(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-// Handler untuk decode barcode IATA
-pub async fn decode_barcode(
-    State(pool): State<PgPool>,
-    Json(payload): Json<DecodeRequest>,
-) -> Result<(StatusCode, Json<ApiResponse<DecodedBarcode>>), AppError> {
-    payload.validate()?;
-    let decoded = database::decode_barcode_iata(&pool, payload).await?;
-    let response = ApiResponse {
-        status: "success".to_string(),
-        message: Some("Barcode decoded successfully".to_string()),
-        data: Some(decoded),
-        total: None,
-    };
-    Ok((StatusCode::CREATED, Json(response)))
-}
-
-// Handler untuk mendapatkan semua decoded barcodes
-pub async fn get_decoded_barcodes(
-    State(pool): State<PgPool>,
-    Query(query): Query<GetDecodedBarcodesQuery>,
-) -> Result<Json<ApiResponse<Vec<DecodedBarcode>>>, AppError> {
-    let decoded_list = database::get_all_decoded_barcodes(&pool, query.flight_id).await?;
-    let response = ApiResponse {
-        status: "success".to_string(),
-        message: None,
-        data: Some(decoded_list),
-        total: None,
-    };
-    Ok(Json(response))
-}
-
 // ==================== REJECTION LOGGING HANDLERS ====================
 
-// Handler untuk membuat rejection log baru
+/// Create rejection log
+#[utoipa::path(
+    post,
+    path = "/api/rejection-logs",
+    tag = "Logs",
+    request_body = CreateRejectionLog,
+    responses(
+        (status = 201, description = "Rejection log created successfully", body = RejectionLog),
+        (status = 400, description = "Validation error"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn create_rejection_log(
     State(pool): State<PgPool>,
     Json(payload): Json<CreateRejectionLog>,
@@ -315,7 +493,23 @@ pub async fn create_rejection_log(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-// Handler untuk mendapatkan rejection logs dengan filtering
+/// Get rejection logs with filtering
+#[utoipa::path(
+    get,
+    path = "/api/rejection-logs",
+    tag = "Logs",
+    params(
+        ("limit" = Option<i64>, Query, description = "Limit number of results"),
+        ("offset" = Option<i64>, Query, description = "Offset for pagination"),
+        ("airline" = Option<String>, Query, description = "Filter by airline code"),
+        ("reason" = Option<String>, Query, description = "Filter by rejection reason"),
+        ("device_id" = Option<String>, Query, description = "Filter by device ID")
+    ),
+    responses(
+        (status = 200, description = "List of rejection logs", body = Vec<RejectionLog>),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_rejection_logs(
     State(pool): State<PgPool>,
     Query(query): Query<RejectionLogQuery>,
@@ -330,7 +524,16 @@ pub async fn get_rejection_logs(
     Ok(Json(response))
 }
 
-// Handler untuk mendapatkan rejection statistics
+/// Get rejection statistics
+#[utoipa::path(
+    get,
+    path = "/api/rejection-logs/stats",
+    tag = "Logs",
+    responses(
+        (status = 200, description = "Rejection statistics"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_rejection_stats(
     State(pool): State<PgPool>,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -338,9 +541,18 @@ pub async fn get_rejection_stats(
     Ok(Json(stats))
 }
 
-// ============= Translation/Code Mapping Handlers =============
+// ==================== CODE TRANSLATION HANDLERS ====================
 
-// Handler untuk mendapatkan airport codes
+/// Get airport codes
+#[utoipa::path(
+    get,
+    path = "/api/codes/airports",
+    tag = "Codes",
+    responses(
+        (status = 200, description = "List of airport codes", body = Vec<AirportCode>),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_airport_codes(
     State(pool): State<PgPool>,
 ) -> Result<Json<ApiResponse<Vec<crate::models::AirportCode>>>, AppError> {
@@ -354,7 +566,16 @@ pub async fn get_airport_codes(
     Ok(Json(response))
 }
 
-// Handler untuk mendapatkan airline codes
+/// Get airline codes
+#[utoipa::path(
+    get,
+    path = "/api/codes/airlines",
+    tag = "Codes",
+    responses(
+        (status = 200, description = "List of airline codes", body = Vec<AirlineCode>),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_airline_codes(
     State(pool): State<PgPool>,
 ) -> Result<Json<ApiResponse<Vec<crate::models::AirlineCode>>>, AppError> {
@@ -368,7 +589,16 @@ pub async fn get_airline_codes(
     Ok(Json(response))
 }
 
-// Handler untuk mendapatkan cabin class codes
+/// Get cabin class codes
+#[utoipa::path(
+    get,
+    path = "/api/codes/classes",
+    tag = "Codes",
+    responses(
+        (status = 200, description = "List of cabin class codes", body = Vec<CabinClassCode>),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_cabin_class_codes(
     State(pool): State<PgPool>,
 ) -> Result<Json<ApiResponse<Vec<crate::models::CabinClassCode>>>, AppError> {
@@ -382,7 +612,16 @@ pub async fn get_cabin_class_codes(
     Ok(Json(response))
 }
 
-// Handler untuk mendapatkan starter data version
+/// Get starter data version
+#[utoipa::path(
+    get,
+    path = "/api/starter-data/version",
+    tag = "Codes",
+    responses(
+        (status = 200, description = "Starter data version"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_starter_data_version(
     State(pool): State<PgPool>,
 ) -> Result<Json<ApiResponse<crate::models::StarterDataVersion>>, AppError> {
