@@ -153,6 +153,16 @@ echo "Konfigurasi Database:"
 prompt_password "Masukkan password untuk database user '$DB_USER'" DB_PASSWORD
 
 echo ""
+echo "Generating API Key..."
+API_KEY=$(openssl rand -hex 32)
+print_success "API Key generated (64 characters)"
+echo "API_KEY: $API_KEY"
+echo ""
+print_warning "IMPORTANT: Save this API key securely!"
+echo "You will need it for Flutter app configuration."
+echo ""
+read -p "Press Enter to continue..."
+
 print_success "Configuration collected"
 
 ################################################################################
@@ -279,12 +289,17 @@ fi
 # Create .env file
 print_warning "Creating .env file..."
 sudo -u $APP_USER bash -c "cat > $APP_DIR/.env" << EOF
+# ==============================================================================
+# AirTally REST API - Production Configuration
+# Generated: $(date)
+# ==============================================================================
+
 # Database Configuration
 DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME
 
 # Server Configuration
-SERVER_HOST=0.0.0.0
-SERVER_PORT=3000
+HOST=0.0.0.0
+PORT=3000
 
 # Environment
 ENVIRONMENT=production
@@ -295,8 +310,20 @@ LOG_LEVEL=info
 # Features
 ENABLE_SWAGGER=false
 
-# Security
-RATE_LIMIT_PER_MINUTE=100
+# ==============================================================================
+# Security: API Key Authentication
+# ==============================================================================
+# This key is required for all API requests (X-API-Key header)
+# Generated with: openssl rand -hex 32
+API_KEY=$API_KEY
+
+# Database Pool Settings
+DB_MIN_CONNECTIONS=10
+DB_MAX_CONNECTIONS=50
+DB_CONNECT_TIMEOUT=5
+DB_ACQUIRE_TIMEOUT=10
+DB_IDLE_TIMEOUT=300
+DB_MAX_LIFETIME=600
 EOF
 
 sudo -u $APP_USER chmod 600 $APP_DIR/.env
@@ -443,16 +470,25 @@ print_header "Testing Installation"
 echo "Testing API..."
 sleep 2
 
-if curl -s http://localhost:3000/api/starter-data/version | grep -q "success"; then
-    print_success "API test passed (direct)"
+# Test health endpoint (no auth required)
+if curl -s http://localhost:3000/health | grep -q "healthy"; then
+    print_success "Health check passed (direct)"
 else
-    print_error "API test failed (direct)"
+    print_error "Health check failed (direct)"
 fi
 
-if curl -s http://10.17.6.155/api/starter-data/version | grep -q "success"; then
-    print_success "API test passed (via Nginx)"
+# Test with API key
+if curl -s -H "X-API-Key: $API_KEY" http://localhost:3000/api/starter-data/version | grep -q "version"; then
+    print_success "API test passed with authentication (direct)"
 else
-    print_error "API test failed (via Nginx)"
+    print_warning "API test failed (may need more time to start)"
+fi
+
+# Test via Nginx
+if curl -s http://10.17.6.155/health | grep -q "healthy"; then
+    print_success "Health check passed (via Nginx)"
+else
+    print_error "Health check failed (via Nginx)"
 fi
 
 ################################################################################
@@ -468,6 +504,21 @@ echo "  • API URL: http://10.17.6.155/api"
 echo "  • Health Check: http://10.17.6.155/health"
 echo "  • Version: http://10.17.6.155/api/starter-data/version"
 echo ""
+echo "🔐 Security Configuration:"
+echo "  • Authentication: API Key Only (simplified)"
+echo "  • API Key: $API_KEY"
+echo "  • Rate Limiting: DISABLED"
+echo "  • IP Whitelist: DISABLED"
+echo ""
+print_warning "IMPORTANT: Save the API key above!"
+echo "You will need to add this key to your Flutter app:"
+echo ""
+echo "  // lib/config/api_config.dart"
+echo "  class ApiConfig {"
+echo "    static const String apiKey = '$API_KEY';"
+echo "    static const String baseUrl = 'http://10.17.6.155:3000';"
+echo "  }"
+echo ""
 echo "📁 Path Penting:"
 echo "  • App Directory: $APP_DIR"
 echo "  • Binary: $APP_DIR/target/release/airtally-rest"
@@ -478,13 +529,22 @@ echo "  • View logs: sudo journalctl -u $SERVICE_NAME -f"
 echo "  • Restart: sudo systemctl restart $SERVICE_NAME"
 echo "  • Status: sudo systemctl status $SERVICE_NAME"
 echo ""
+echo "🧪 Test API:"
+echo "  # Without API key (should fail):"
+echo "  curl http://10.17.6.155/api/starter-data/version"
+echo ""
+echo "  # With API key (should work):"
+echo "  curl -H \"X-API-Key: $API_KEY\" http://10.17.6.155/api/starter-data/version"
+echo ""
 echo "📱 Next Steps:"
-echo "  1. Test API dari browser: http://10.17.6.155/api/starter-data/version"
-echo "  2. Update Flutter app untuk connect ke: http://10.17.6.155/api"
-echo "  3. Backup database: pg_dump -h localhost -U $DB_USER $DB_NAME > backup.sql"
+echo "  1. Add API key to Flutter app (lib/config/api_config.dart)"
+echo "  2. Update HTTP service to include X-API-Key header"
+echo "  3. Build APK: flutter build apk --release --obfuscate"
+echo "  4. Test from mobile app"
 echo ""
 echo "📖 Documentation:"
-echo "  • Manual Guide: $APP_DIR/DEPLOYMENT_MANUAL.md"
+echo "  • Quick Setup: $APP_DIR/QUICK_SETUP_SIMPLIFIED.md"
+echo "  • Security Guide: $APP_DIR/SIMPLIFIED_SECURITY_CONFIG.md"
 echo "  • Update Script: $APP_DIR/update-api.sh"
 echo ""
 

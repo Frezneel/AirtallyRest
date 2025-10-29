@@ -1,11 +1,11 @@
 use sqlx::PgPool;
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
-use axum::http::{Method, header};
-use crate::{rate_limit::RateLimiter, database_config::{create_connection_pool, get_database_config}};
+use axum::http::{Method, header, HeaderValue, HeaderName};
+use crate::database_config::{create_connection_pool, get_database_config};
 
 // Impor modul lokal
 mod auth_middleware;
@@ -17,7 +17,6 @@ mod handlers;
 mod middleware;
 mod models;
 mod openapi;
-mod rate_limit; // Custom rate limiting implementation
 mod router;
 mod barcode_parser;  // Shared IATA BCBP parser (synchronized with mobile app)
 
@@ -50,22 +49,19 @@ async fn main() {
         )
         .init();
 
-    tracing::info!("Starting AirTally REST API with security hardening");
+    tracing::info!("Starting AirTally REST API");
     tracing::info!("Environment: {}", config.environment);
     tracing::info!("Server address: {}", config.server_address());
-    tracing::info!("Rate limit: {} requests/minute", config.rate_limit_per_minute);
     tracing::info!("Swagger UI: {}", if config.enable_swagger { "enabled" } else { "disabled" });
     tracing::info!("Security: API Key authentication enabled");
-    tracing::info!("Security: IP filtering enabled");
-    tracing::info!("Security: Rate limiting enabled");
-    tracing::info!("Security: CORS restricted");
+    tracing::info!("Security: CORS configured");
 
     // Membuat koneksi pool ke database PostgreSQL dengan konfigurasi optimasi
     let db_config = get_database_config(&config);
     let db_pool = match create_connection_pool(&config.database_url, &db_config).await {
         Ok(pool) => {
             tracing::info!("Successfully connected to the database with optimized pool configuration");
-            tracing::info!("Pool config: min={}, max={}", db_config.min_connections, db_config.max_connections);
+            tracing::info!("Pool config: min={}, max={}", db_config.min_connections(), db_config.max_connections());
             pool
         }
         Err(e) => {
@@ -83,40 +79,21 @@ async fn main() {
         }
     }
 
-    // Mengkonfigurasi CORS - Production: restrict to airport network only
-    let cors = if config.is_production() {
-        // Production: Only allow specific origins
-        CorsLayer::new()
-            .allow_origin("http://192.168.1.100".parse::<HeaderValue>().unwrap())
-            .allow_origin("http://192.168.100.1".parse::<HeaderValue>().unwrap())
-            .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
-            .allow_headers([
-                header::CONTENT_TYPE,
-                header::ACCEPT,
-                header::X_API_KEY, // API key header
-            ])
-    } else {
-        // Development: Allow localhost and local network
-        CorsLayer::new()
-            .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
-            .allow_origin("http://127.0.0.1:3000".parse::<HeaderValue>().unwrap())
-            .allow_origin("http://192.168.1.100".parse::<HeaderValue>().unwrap())
-            .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
-            .allow_headers([
-                header::CONTENT_TYPE,
-                header::ACCEPT,
-                header::X_API_KEY,
-            ])
-    };
+    // Mengkonfigurasi CORS - Allow all origins for simplicity
+    let cors = CorsLayer::permissive()
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::ACCEPT,
+            HeaderName::from_static("x-api-key"),
+        ]);
 
-    // Initialize rate limiter
-    let rate_limiter = Arc::new(RateLimiter::from_env());
-    tracing::info!("Rate limiting enabled: {} requests/minute", rate_limiter.max_requests);
+    tracing::info!("CORS: Permissive mode (all origins allowed)");
 
     // Membuat router utama aplikasi
+    // Security: Only API Key authentication (no rate limiting, no IP whitelist)
     let app = router::create_router(db_pool, config.enable_swagger)
-        .layer(axum::middleware::from_fn_with_state(config.clone(), auth_middleware::api_auth_middleware))
-        .layer(axum::middleware::from_fn_with_state(rate_limiter.clone(), rate_limit::rate_limit_middleware))
+        .layer(axum::middleware::from_fn_with_state(config.clone(), auth_middleware::api_key_only_middleware))
         .layer(axum::middleware::from_fn(auth_middleware::security_logging_middleware))
         .layer(TraceLayer::new_for_http())
         .layer(cors);

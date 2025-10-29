@@ -1,6 +1,5 @@
 use crate::{
     database,
-    database_config::health_check,
     errors::AppError,
     models::{
         ApiResponse, CreateFlight, ScanDataInput, ScanData, Flight, FlightStatistics, GetFlightsQuery,
@@ -650,7 +649,7 @@ pub async fn get_starter_data_version(
 pub async fn health_check(
     State(pool): State<PgPool>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), AppError> {
-    let health_info = health_check(&pool).await;
+    let health_info = crate::database_config::health_check(&pool).await;
     let status_code = StatusCode::from_u16(health_info.status_code())
         .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 

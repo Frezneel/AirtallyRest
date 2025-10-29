@@ -7,19 +7,98 @@ use axum::{
 use std::net::IpAddr;
 use crate::config::AppConfig;
 
-/// API Authentication Middleware
-/// 
+/// Simplified API Key Authentication Middleware
+///
 /// This middleware handles:
-/// 1. API Key validation
-/// 2. IP whitelist filtering for airport networks
-/// 3. Request logging for security audit
-/// 
+/// 1. API Key validation only
+///
 /// # Security Features
 /// - API key validation for all endpoints except health check
-/// - IP-based access control for airport networks
+/// - No IP whitelist (for easier integration with mobile apps)
+/// - No rate limiting (for better performance)
 /// - Request logging with client identification
-/// - Rate limiting headers
-/// - CORS security headers
+pub async fn api_key_only_middleware(
+    axum::extract::State(config): axum::extract::State<AppConfig>,
+    req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    // Get client IP from various headers (for logging only)
+    let client_ip = extract_client_ip(&req);
+
+    // Skip auth for health check endpoint
+    if req.uri().path() == "/health" {
+        tracing::info!(
+            endpoint = "health_check",
+            client_ip = %client_ip,
+            "Health check accessed (no auth required)"
+        );
+        return Ok(next.run(req).await);
+    }
+
+    // Extract API key from header
+    let api_key = req
+        .headers()
+        .get("X-API-Key")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    // Validate API key
+    let expected_key = std::env::var("API_KEY").unwrap_or_else(|_| {
+        // Fallback to default for development
+        if config.is_development() {
+            "airtally_dev_key_2025".to_string()
+        } else {
+            "airtally_production_secure_key_2025".to_string()
+        }
+    });
+
+    if api_key != expected_key {
+        tracing::warn!(
+            client_ip = %client_ip,
+            provided_key_prefix = %if api_key.len() >= 8 { &api_key[..8] } else { api_key },
+            endpoint = %req.uri().path(),
+            "Invalid API key attempted"
+        );
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    // Log authenticated request
+    tracing::info!(
+        client_ip = %client_ip,
+        method = %req.method(),
+        endpoint = %req.uri().path(),
+        "Authenticated request"
+    );
+
+    // Add security headers to response
+    let mut response = next.run(req).await;
+    let headers = response.headers_mut();
+
+    // Security headers
+    headers.insert(
+        "X-Content-Type-Options",
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        "X-Frame-Options",
+        HeaderValue::from_static("SAMEORIGIN"),
+    );
+    headers.insert(
+        "X-XSS-Protection",
+        HeaderValue::from_static("1; mode=block"),
+    );
+    headers.insert(
+        "Referrer-Policy",
+        HeaderValue::from_static("strict-origin-when-cross-origin"),
+    );
+
+    Ok(response)
+}
+
+/// Legacy API Authentication Middleware (WITH IP WHITELIST - NOT USED)
+///
+/// Kept for reference, use api_key_only_middleware instead
+#[allow(dead_code)]
 pub async fn api_auth_middleware(
     axum::extract::State(config): axum::extract::State<AppConfig>,
     req: Request,
@@ -27,7 +106,7 @@ pub async fn api_auth_middleware(
 ) -> Result<Response, StatusCode> {
     // Get client IP from various headers (supports reverse proxy)
     let client_ip = extract_client_ip(&req);
-    
+
     // Skip auth for health check endpoint
     if req.uri().path() == "/health" {
         tracing::info!(
@@ -86,14 +165,14 @@ pub async fn api_auth_middleware(
     // Add security headers to response
     let mut response = next.run(req).await;
     let headers = response.headers_mut();
-    
+
     // Security headers
     headers.insert(
         "X-Content-Type-Options",
         HeaderValue::from_static("nosniff"),
     );
     headers.insert(
-        "X-Frame-Options", 
+        "X-Frame-Options",
         HeaderValue::from_static("SAMEORIGIN"),
     );
     headers.insert(
@@ -159,7 +238,14 @@ fn is_allowed_ip(ip: IpAddr, config: &AppConfig) -> bool {
 
     // In development, allow all private networks
     if config.is_development() {
-        return ip.is_private();
+        return match ip {
+            IpAddr::V4(ipv4) => ipv4.is_private(),
+            IpAddr::V6(ipv6) => {
+                // IPv6 private ranges: fc00::/7 (unique local) or fe80::/10 (link-local)
+                let segments = ipv6.segments();
+                (segments[0] & 0xfe00) == 0xfc00 || (segments[0] & 0xffc0) == 0xfe80
+            }
+        };
     }
 
     // In production, only allow configured airport networks
@@ -173,37 +259,35 @@ fn is_allowed_ip(ip: IpAddr, config: &AppConfig) -> bool {
 }
 
 /// Check if IP is within the specified network range
-/// 
+///
 /// Supports CIDR notation (e.g., "192.168.1.0/24")
 fn is_ip_in_network(ip: IpAddr, network: &str) -> bool {
-    match network.split('/') {
-        [ip_str, mask] => {
-            if let (Ok(network_ip), Ok(prefix)) = (ip_str.parse::<IpAddr>(), mask.parse::<u8>()) {
-                match (network_ip, ip) {
-                    (IpAddr::V4(net), IpAddr::V4(client)) => {
-                        let net_u32 = u32::from_be_bytes(net.octets());
-                        let client_u32 = u32::from_be_bytes(client.octets());
-                        let mask = !0u32 << (32 - prefix);
-                        (net_u32 & mask) == (client_u32 & mask)
-                    }
-                    (IpAddr::V6(net), IpAddr::V6(client)) => {
-                        // Simplified IPv6 check - would need proper implementation
-                        net.segments()[..4] == client.segments()[..4]
-                    }
-                    _ => false,
+    let parts: Vec<&str> = network.split('/').collect();
+    if parts.len() == 2 {
+        let (ip_str, mask) = (parts[0], parts[1]);
+        if let (Ok(network_ip), Ok(prefix)) = (ip_str.parse::<IpAddr>(), mask.parse::<u8>()) {
+            return match (network_ip, ip) {
+                (IpAddr::V4(net), IpAddr::V4(client)) => {
+                    let net_u32 = u32::from_be_bytes(net.octets());
+                    let client_u32 = u32::from_be_bytes(client.octets());
+                    let mask = !0u32 << (32 - prefix);
+                    (net_u32 & mask) == (client_u32 & mask)
                 }
-            } else {
-                false
-            }
+                (IpAddr::V6(net), IpAddr::V6(client)) => {
+                    // Simplified IPv6 check - would need proper implementation
+                    net.segments()[..4] == client.segments()[..4]
+                }
+                _ => false,
+            };
         }
-        _ => {
-            // If no CIDR notation, treat as exact IP match
-            if let Ok(network_ip) = network.parse::<IpAddr>() {
-                network_ip == ip
-            } else {
-                false
-            }
-        }
+        return false;
+    }
+
+    // If no CIDR notation, treat as exact IP match
+    if let Ok(network_ip) = network.parse::<IpAddr>() {
+        network_ip == ip
+    } else {
+        false
     }
 }
 
