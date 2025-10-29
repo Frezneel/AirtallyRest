@@ -331,7 +331,8 @@ print_success ".env file created"
 
 # Build application
 print_warning "Building application (this will take 10-15 minutes)..."
-sudo -u $APP_USER bash -c "source \$HOME/.cargo/env && cd $APP_DIR && cargo build --release"
+# Use SQLx offline mode (doesn't require database connection during build)
+sudo -u $APP_USER bash -c "source \$HOME/.cargo/env && cd $APP_DIR && SQLX_OFFLINE=true cargo build --release"
 print_success "Application built"
 
 # Run migrations
