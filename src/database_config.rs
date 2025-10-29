@@ -121,6 +121,16 @@ impl DatabaseConfig {
             test_on_check_out: true,
         }
     }
+
+    /// Get minimum connections
+    pub fn min_connections(&self) -> u32 {
+        self.min_connections
+    }
+
+    /// Get maximum connections
+    pub fn max_connections(&self) -> u32 {
+        self.max_connections
+    }
 }
 
 /// Create database connection pool with optimized settings
@@ -138,22 +148,21 @@ pub async fn create_connection_pool(
         "Creating database connection pool"
     );
 
-    let pool = PgPoolOptions::new()
+    // Note: SQLx 0.8 simplified pool options - some methods removed
+    let pool: Result<PgPool, sqlx::Error> = PgPoolOptions::new()
         .min_connections(config.min_connections)
         .max_connections(config.max_connections)
-        .connect_timeout(config.connect_timeout)
         .acquire_timeout(config.acquire_timeout)
-        .idle_timeout(config.idle_timeout)
+        .idle_timeout(Some(config.idle_timeout))
         .max_lifetime(config.max_lifetime)
-        .test_on_check_out(config.test_on_check_out)
         .after_connect(|conn, _meta| Box::pin(async move {
             // Set connection parameters
             sqlx::query("SET timezone = 'UTC'")
-                .execute(conn)
+                .execute(&mut *conn)
                 .await?;
 
             sqlx::query("SET application_name = 'airtally-rest-api'")
-                .execute(conn)
+                .execute(&mut *conn)
                 .await?;
 
             tracing::debug!("Database connection established with timezone UTC");
@@ -162,22 +171,22 @@ pub async fn create_connection_pool(
         .connect(database_url)
         .await;
 
-    match &pool {
-        Ok(_) => {
+    match pool {
+        Ok(pool) => {
             tracing::info!("Database connection pool created successfully");
-            
+
             // Test the pool
-            if let Err(e) = test_pool(&pool.as_ref().unwrap()).await {
+            if let Err(e) = test_pool(&pool).await {
                 tracing::error!("Database pool test failed: {:?}", e);
                 return Err(e);
             }
-            
+
             tracing::info!("Database pool test passed");
-            Ok(pool.unwrap())
+            Ok(pool)
         }
         Err(e) => {
             tracing::error!("Failed to create database pool: {:?}", e);
-            Err(e.clone())
+            Err(e)
         }
     }
 }
@@ -223,7 +232,7 @@ pub async fn health_check(pool: &PgPool) -> DatabaseHealth {
                 is_healthy: true,
                 response_time: start.elapsed(),
                 active_connections: pool.size(),
-                idle_connections: pool.num_idle(),
+                idle_connections: pool.num_idle() as u32,
                 error: None,
             }
         }
@@ -232,7 +241,7 @@ pub async fn health_check(pool: &PgPool) -> DatabaseHealth {
                 is_healthy: false,
                 response_time: start.elapsed(),
                 active_connections: pool.size(),
-                idle_connections: pool.num_idle(),
+                idle_connections: pool.num_idle() as u32,
                 error: Some(format!("Database test failed: {}", e)),
             }
         }

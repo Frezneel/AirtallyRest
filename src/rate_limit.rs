@@ -2,7 +2,7 @@ use axum::{
     extract::{Request, State},
     http::StatusCode,
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
 };
 use std::{
     collections::HashMap,
@@ -135,7 +135,7 @@ impl RateLimiter {
                 
                 // Clean up each tracker
                 for tracker in trackers.values_mut() {
-                    self::cleanup_tracker_static(tracker, now, &window_duration);
+                    cleanup_tracker_static(tracker, now, &window_duration);
                 }
                 
                 // Remove empty trackers (IPs that haven't made requests recently)
@@ -143,13 +143,6 @@ impl RateLimiter {
                     now.duration_since(tracker.last_cleanup) < cleanup_interval * 3
                 });
             }
-        });
-    }
-
-    /// Static helper for cleanup in async context
-    fn cleanup_tracker_static(tracker: &mut RequestTracker, now: Instant, window_duration: &Duration) {
-        tracker.requests.retain(|&timestamp| {
-            now.duration_since(timestamp) <= *window_duration
         });
     }
 
@@ -191,6 +184,18 @@ impl RateLimiter {
             }
         }
     }
+
+    /// Get maximum requests per window
+    pub fn max_requests(&self) -> u32 {
+        self.max_requests
+    }
+}
+
+/// Static helper for cleanup in async context
+fn cleanup_tracker_static(tracker: &mut RequestTracker, now: Instant, window_duration: &Duration) {
+    tracker.requests.retain(|&timestamp| {
+        now.duration_since(timestamp) <= *window_duration
+    });
 }
 
 /// Rate limit status information
@@ -216,12 +221,15 @@ pub async fn rate_limit_middleware(
 ) -> Result<Response, StatusCode> {
     // Extract client IP
     let client_ip = extract_client_ip(&req);
-    
-    // Check rate limit
+
+    // Check rate limit and update tracker
+    let is_allowed = limiter.is_allowed(client_ip).await;
+
+    // Get status for headers (after check)
     let status = limiter.get_status(client_ip);
-    
+
     // Add rate limit headers to response
-    let mut response = if status.allowed {
+    let mut response = if is_allowed {
         next.run(req).await
     } else {
         tracing::warn!(
@@ -232,13 +240,13 @@ pub async fn rate_limit_middleware(
         );
         
         // Return 429 Too Many Requests
-        let mut error_response = axum::Json(serde_json::json!({
+        let error_response = serde_json::json!({
             "status": "error",
             "message": "Rate limit exceeded. Please try again later.",
             "retry_after": status.window_duration.as_secs()
-        }));
-        
-        let mut response = axum::response::Json(error_response).into_response();
+        });
+
+        let mut response = axum::Json(error_response).into_response();
         *response.status_mut() = StatusCode::TOO_MANY_REQUESTS;
         response
     };
@@ -251,16 +259,13 @@ pub async fn rate_limit_middleware(
     );
     headers.insert(
         "X-RateLimit-Remaining",
-        (status.max_requests - status.current_requests).to_string().parse().unwrap_or_else(|_| "0".to_string()),
+        (status.max_requests - status.current_requests).to_string().parse().unwrap(),
     );
+    // Calculate reset time as seconds from now
+    let reset_secs = status.reset_time.saturating_duration_since(std::time::Instant::now()).as_secs();
     headers.insert(
         "X-RateLimit-Reset",
-        status.reset_time.duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-            .to_string()
-            .parse()
-            .unwrap_or_else(|_| "0".to_string()),
+        reset_secs.to_string().parse().unwrap(),
     );
     
     Ok(response)
@@ -293,19 +298,8 @@ fn extract_client_ip(req: &Request) -> IpAddr {
     IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
 }
 
-/// Create Axum layer from rate limiter
-pub fn create_rate_limit_layer(max_requests_per_minute: u64) -> axum::middleware::FromFnLayer<impl Fn(Request, Next) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, StatusCode>>> + Send> + Clone> {
-    let limiter = Arc::new(RateLimiter::new(
-        max_requests_per_minute as u32,
-        Duration::from_secs(60),
-        Duration::from_secs(300),
-    ));
-
-    axum::middleware::from_fn_with_state(
-        limiter,
-        rate_limit_middleware,
-    )
-}
+// Note: create_rate_limit_layer removed due to complex type signature issues in Axum 0.8
+// Use RateLimiter::from_env() with axum::middleware::from_fn_with_state directly instead
 
 #[cfg(test)]
 mod tests {
@@ -379,20 +373,4 @@ mod tests {
 
     // test_create_from_env removed to avoid rust-analyzer false positives
     // The functionality is tested in integration tests
-}
-
-/// Create Axum layer from rate limiter
-/// 
-/// This function creates a middleware layer for rate limiting.
-pub fn create_rate_limit_layer(max_requests_per_minute: u64) -> axum::middleware::FromFnLayer<impl Fn(Request, Next) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, StatusCode>> + Send>>> {
-    let limiter = Arc::new(RateLimiter::new(
-        max_requests_per_minute as u32,
-        Duration::from_secs(60),
-        Duration::from_secs(300),
-    ));
-
-    axum::middleware::from_fn_with_state(
-        limiter,
-        rate_limit_middleware,
-    )
 }
