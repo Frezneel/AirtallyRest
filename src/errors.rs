@@ -14,8 +14,13 @@ pub enum AppError {
     ValidationError(ValidationErrors),
     FlightNotFound,
     DuplicateFlight,
+    DuplicateScan { barcode: String, flight_id: i32, existing_scan_id: i32 },
     InvalidDepartureTime,
     InvalidBarcodeFormat,
+    // Authentication errors
+    Unauthorized(String),
+    NotFound(String),
+    InternalError(String),
     // Tambahkan jenis error lain di sini jika diperlukan
 }
 
@@ -86,6 +91,24 @@ impl IntoResponse for AppError {
                     json!({}),
                 )
             }
+            AppError::DuplicateScan { ref barcode, flight_id, existing_scan_id } => {
+                tracing::info!(
+                    error_type = "DuplicateScan",
+                    barcode = %barcode,
+                    flight_id = flight_id,
+                    existing_scan_id = existing_scan_id,
+                    "Duplicate scan detected - barcode already scanned for this flight"
+                );
+                (
+                    StatusCode::CONFLICT,
+                    "Barcode already scanned for this flight".to_string(),
+                    "DUPLICATE_SCAN".to_string(),
+                    json!({
+                        "existing_scan_id": existing_scan_id,
+                        "flight_id": flight_id
+                    }),
+                )
+            }
             AppError::InvalidDepartureTime => {
                 tracing::warn!(
                     error_type = "InvalidDepartureTime",
@@ -108,6 +131,45 @@ impl IntoResponse for AppError {
                     "Invalid barcode format for IATA decoding".to_string(),
                     "INVALID_BARCODE_FORMAT".to_string(),
                     json!({}),
+                )
+            }
+            AppError::Unauthorized(ref msg) => {
+                tracing::warn!(
+                    error_type = "Unauthorized",
+                    message = %msg,
+                    "Authentication failed"
+                );
+                (
+                    StatusCode::UNAUTHORIZED,
+                    msg.clone(),
+                    "UNAUTHORIZED".to_string(),
+                    json!({}),
+                )
+            }
+            AppError::NotFound(ref msg) => {
+                tracing::warn!(
+                    error_type = "NotFound",
+                    message = %msg,
+                    "Resource not found"
+                );
+                (
+                    StatusCode::NOT_FOUND,
+                    msg.clone(),
+                    "NOT_FOUND".to_string(),
+                    json!({}),
+                )
+            }
+            AppError::InternalError(ref msg) => {
+                tracing::error!(
+                    error_type = "InternalError",
+                    message = %msg,
+                    "Internal server error"
+                );
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                    "INTERNAL_ERROR".to_string(),
+                    json!({ "detail": msg }),
                 )
             }
         };

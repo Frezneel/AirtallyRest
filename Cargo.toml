@@ -43,3 +43,8 @@ utoipa-swagger-ui = { version = "9.0", features = ["axum"] }
 # Utilities
 regex = "1.11.3"
 lazy_static = "1.5"
+
+# Authentication & Security
+bcrypt = "0.15"
+jsonwebtoken = "9.3"
+sha2 = "0.10"

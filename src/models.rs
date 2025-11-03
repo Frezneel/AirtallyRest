@@ -393,3 +393,166 @@ pub struct StarterDataVersion {
     pub version: i32,
     pub updated_at: DateTime<Utc>,
 }
+
+// ============= Authentication Models =============
+
+// Model untuk user (response)
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct User {
+    pub id: i32,
+    pub username: String,
+    pub email: String,
+    #[serde(skip_serializing)] // Never send password hash to client
+    pub password_hash: String,
+    pub full_name: String,
+    pub role_id: i32,
+    pub is_active: bool,
+    pub last_login_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
+    pub created_by: Option<i32>,
+}
+
+// Model untuk user dengan role information (untuk response detail)
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserWithRole {
+    pub id: i32,
+    pub username: String,
+    pub email: String,
+    pub full_name: String,
+    pub role: Role,
+    pub is_active: bool,
+    pub last_login_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+// Model untuk role
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, ToSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Role {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+// Model untuk role dengan permissions
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoleWithPermissions {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub permissions: Vec<Permission>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+// Model untuk permission
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, ToSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Permission {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub resource: String,
+    pub action: String,
+    pub created_at: DateTime<Utc>,
+}
+
+// Model untuk login request
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginRequest {
+    #[validate(length(min = 3, max = 50))]
+    pub username: String,
+    #[validate(length(min = 6))]
+    pub password: String,
+    pub device_info: Option<String>,
+}
+
+// Model untuk login response
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginResponse {
+    pub token: String,
+    pub user: UserWithRole,
+    pub permissions: Vec<String>, // List of permission names
+    pub expires_at: DateTime<Utc>,
+}
+
+// Model untuk create user request
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateUserRequest {
+    #[validate(length(min = 3, max = 50))]
+    pub username: String,
+    #[validate(email)]
+    pub email: String,
+    #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
+    pub password: String,
+    #[validate(length(min = 2, max = 255))]
+    pub full_name: String,
+    pub role_id: i32,
+}
+
+// Model untuk update user request
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateUserRequest {
+    #[validate(email)]
+    pub email: Option<String>,
+    #[validate(length(min = 2, max = 255))]
+    pub full_name: Option<String>,
+    pub role_id: Option<i32>,
+    pub is_active: Option<bool>,
+}
+
+// Model untuk change password request
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangePasswordRequest {
+    #[validate(length(min = 6))]
+    pub old_password: String,
+    #[validate(length(min = 8, message = "New password must be at least 8 characters"))]
+    pub new_password: String,
+}
+
+// Model untuk user session
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct UserSession {
+    pub id: i32,
+    pub user_id: i32,
+    pub token_hash: String,
+    pub device_info: Option<String>,
+    pub ip_address: Option<String>,
+    pub expires_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub revoked_at: Option<DateTime<Utc>>,
+}
+
+// Model untuk JWT claims
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Claims {
+    pub sub: i32,              // user_id
+    pub username: String,
+    pub role: String,
+    pub permissions: Vec<String>,
+    pub exp: i64,              // Expiration time (unix timestamp)
+    pub iat: i64,              // Issued at (unix timestamp)
+}
+
+// Query parameters untuk list users
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListUsersQuery {
+    pub role_id: Option<i32>,
+    pub is_active: Option<bool>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
