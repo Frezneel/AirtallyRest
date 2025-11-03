@@ -297,6 +297,31 @@ pub async fn create_scan_data(
     // Pastikan flight_id valid
     let _ = get_flight_by_id(pool, scan.flight_id).await?;
 
+    // Check for duplicate scan (same barcode + same flight)
+    let existing_scan = sqlx::query_as!(
+        ScanData,
+        r#"
+        SELECT id, barcode_value, barcode_format, scan_time, device_id, flight_id, created_at
+        FROM scan_data
+        WHERE barcode_value = $1 AND flight_id = $2
+        LIMIT 1
+        "#,
+        scan.barcode_value,
+        scan.flight_id,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    // If duplicate found, return HTTP 409 Conflict
+    if let Some(existing) = existing_scan {
+        return Err(AppError::DuplicateScan {
+            barcode: scan.barcode_value.clone(),
+            flight_id: scan.flight_id,
+            existing_scan_id: existing.id,
+        });
+    }
+
+    // No duplicate, proceed with insert
     let new_scan = sqlx::query_as!(
         ScanData,
         r#"
