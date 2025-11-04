@@ -40,7 +40,7 @@ APP_DIR="$FALCON_HOME/FalconRest"
 SERVICE_NAME="falcon-api"
 DB_NAME="falcon"
 DB_USER="falcon_user"
-GITHUB_REPO="https://github.com/Frezneel/airtally.git"  # Update with your repo
+GITHUB_REPO="https://github.com/Frezneel/FalconRest.git"
 BRANCH="main"  # or Development
 
 ################################################################################
@@ -297,7 +297,7 @@ print_success "Repository cloned from $GITHUB_REPO"
 
 print_step 9 $TOTAL_STEPS "Creating .env configuration"
 
-cat > "$APP_DIR/AirtallyRest/.env" <<ENV
+cat > "$APP_DIR/.env" <<ENV
 # ==============================================================================
 # FALCON REST API - Production Configuration
 # Generated: $(date)
@@ -339,8 +339,8 @@ RATE_LIMIT_PER_MINUTE=100
 ENABLE_SWAGGER=false
 ENV
 
-chown "$FALCON_USER:$FALCON_USER" "$APP_DIR/AirtallyRest/.env"
-chmod 600 "$APP_DIR/AirtallyRest/.env"
+chown "$FALCON_USER:$FALCON_USER" "$APP_DIR/.env"
+chmod 600 "$APP_DIR/.env"
 
 print_success ".env file created"
 
@@ -376,7 +376,7 @@ print_warning "IMPORTANT: Save secrets to password manager and delete SECRETS.tx
 print_step 10 $TOTAL_STEPS "Running database migrations"
 
 sudo -u "$FALCON_USER" bash <<MIGRATE
-cd "$APP_DIR/AirtallyRest"
+cd "$APP_DIR"
 source $HOME/.cargo/env
 export DATABASE_URL="postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME"
 sqlx migrate run
@@ -392,14 +392,14 @@ print_step 11 $TOTAL_STEPS "Building FALCON (this will take 10-15 minutes)"
 
 print_info "Starting Rust compilation..."
 sudo -u "$FALCON_USER" bash <<BUILD
-cd "$APP_DIR/AirtallyRest"
+cd "$APP_DIR"
 source $HOME/.cargo/env
 SQLX_OFFLINE=true cargo build --release
 BUILD
 
-if [ -f "$APP_DIR/AirtallyRest/target/release/falcon-rest" ]; then
+if [ -f "$APP_DIR/target/release/falcon-rest" ]; then
     print_success "Build completed successfully"
-    ls -lh "$APP_DIR/AirtallyRest/target/release/falcon-rest"
+    ls -lh "$APP_DIR/target/release/falcon-rest"
 else
     print_error "Build failed - binary not found"
     exit 1
@@ -421,9 +421,9 @@ Wants=postgresql.service
 Type=simple
 User=$FALCON_USER
 Group=$FALCON_USER
-WorkingDirectory=$APP_DIR/AirtallyRest
+WorkingDirectory=$APP_DIR
 Environment="RUST_LOG=info"
-ExecStart=$APP_DIR/AirtallyRest/target/release/falcon-rest
+ExecStart=$APP_DIR/target/release/falcon-rest
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -487,7 +487,7 @@ DATE=$(date +%Y%m%d_%H%M%S)
 mkdir -p $BACKUP_DIR
 
 # Load database credentials
-source /home/falcon/FalconRest/AirtallyRest/.env
+source /home/falcon/FalconRest/.env
 DB_NAME="falcon"
 
 # Extract credentials from DATABASE_URL
@@ -560,7 +560,7 @@ echo ""
 echo -e "${CYAN}📋 System Information:${NC}"
 echo "  • User: $FALCON_USER"
 echo "  • Home: $FALCON_HOME"
-echo "  • Application: $APP_DIR/AirtallyRest"
+echo "  • Application: $APP_DIR"
 echo "  • Service: $SERVICE_NAME"
 echo "  • Status: $(systemctl is-active $SERVICE_NAME)"
 echo ""
@@ -593,15 +593,15 @@ echo "  • Database backup: sudo -u falcon $FALCON_HOME/backup-db.sh"
 echo ""
 echo -e "${CYAN}📝 Important Files:${NC}"
 echo "  • Secrets: $FALCON_HOME/SECRETS.txt ${RED}(DELETE AFTER SAVING!)${NC}"
-echo "  • Configuration: $APP_DIR/AirtallyRest/.env"
+echo "  • Configuration: $APP_DIR/.env"
 echo "  • Service: /etc/systemd/system/$SERVICE_NAME.service"
 echo "  • Backups: $FALCON_HOME/backups/"
-echo "  • Update script: $APP_DIR/AirtallyRest/update-api.sh"
+echo "  • Update script: $APP_DIR/update-api.sh"
 echo ""
 echo -e "${CYAN}📚 Documentation:${NC}"
-echo "  • README: $APP_DIR/AirtallyRest/README.md"
-echo "  • Deployment: $APP_DIR/AirtallyRest/DEPLOYMENT_CHECKLIST.md"
-echo "  • Migration: $APP_DIR/AirtallyRest/MIGRATION_GUIDE.md"
+echo "  • README: $APP_DIR/README.md"
+echo "  • Deployment: $APP_DIR/DEPLOYMENT_CHECKLIST.md"
+echo "  • Roles & Permissions: $APP_DIR/ROLES_AND_PERMISSIONS.md"
 echo ""
 echo -e "${CYAN}✅ Next Steps:${NC}"
 echo "  1. Save secrets from $FALCON_HOME/SECRETS.txt to password manager"
