@@ -1,15 +1,15 @@
 use utoipa::OpenApi;
 
-/// OpenAPI documentation for AirTally REST API
+/// OpenAPI documentation for FALCON REST API
 ///
 /// This module provides comprehensive API documentation using OpenAPI 3.0 specification.
 /// Access the interactive Swagger UI at `/swagger-ui` when enabled.
 #[derive(OpenApi)]
 #[openapi(
     info(
-        title = "AirTally REST API",
+        title = "FALCON REST API",
         version = "1.0.0",
-        description = "REST API for AirTally barcode scanning system. \
+        description = "REST API for FALCON (Flight pAssenger vaLidation and COuntiNg) barcode scanning system. \
                       \n\nThis API handles:\n\
                       - Flight management\n\
                       - Barcode scanning and decoding\n\
@@ -17,8 +17,8 @@ use utoipa::OpenApi;
                       - Rejection logging\n\
                       - Code translation (airports, airlines, cabin classes)",
         contact(
-            name = "AirTally Support",
-            email = "support@airtally.com"
+            name = "FALCON Support",
+            email = "support@injourneydhx.id"
         ),
         license(
             name = "MIT",

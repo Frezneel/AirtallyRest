@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ################################################################################
-# AirTally REST API - Update Script
+# FALCON REST API - Update Script
 # Untuk update aplikasi dari GitHub tanpa full reinstall
 #
 # Usage:
@@ -21,10 +21,10 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-APP_DIR="/home/airtally/AirtallyRest"
-SERVICE_NAME="airtally-api"
+APP_DIR="/home/falcon/FalconRest"
+SERVICE_NAME="falcon-api"
 BRANCH="${1:-main}"
-BACKUP_DIR="/home/airtally/backups"
+BACKUP_DIR="/home/falcon/backups"
 
 ################################################################################
 # Helper Functions
@@ -58,16 +58,16 @@ print_error() {
 # Pre-flight checks
 ################################################################################
 
-print_header "AirTally API Update Script"
+print_header "FALCON API Update Script"
 
 echo "Branch: $BRANCH"
 echo "Date: $(date)"
 echo ""
 
-# Check if running as airtally user
-if [ "$(whoami)" != "airtally" ]; then
-    print_error "Script harus dijalankan sebagai user 'airtally'"
-    echo "Jalankan: sudo su - airtally"
+# Check if running as falcon user
+if [ "$(whoami)" != "falcon" ]; then
+    print_error "Script harus dijalankan sebagai user 'falcon'"
+    echo "Jalankan: sudo su - falcon"
     exit 1
 fi
 
@@ -104,9 +104,9 @@ print_success "Backup directory ready"
 
 print_step 2 $TOTAL_STEPS "Backing up current binary"
 
-if [ -f "$APP_DIR/target/release/airtally-rest" ]; then
-    BACKUP_FILE="$BACKUP_DIR/airtally-rest.$(date +%Y%m%d_%H%M%S)"
-    cp "$APP_DIR/target/release/airtally-rest" "$BACKUP_FILE"
+if [ -f "$APP_DIR/target/release/falcon-rest" ]; then
+    BACKUP_FILE="$BACKUP_DIR/falcon-rest.$(date +%Y%m%d_%H%M%S)"
+    cp "$APP_DIR/target/release/falcon-rest" "$BACKUP_FILE"
     print_success "Backup created: $BACKUP_FILE"
 else
     print_warning "No existing binary found, skipping backup"
@@ -174,14 +174,14 @@ source $HOME/.cargo/env
 # Use SQLx offline mode (doesn't require database connection during build)
 SQLX_OFFLINE=true cargo build --release
 
-if [ -f "$APP_DIR/target/release/airtally-rest" ]; then
+if [ -f "$APP_DIR/target/release/falcon-rest" ]; then
     print_success "Build completed"
 else
     print_error "Build failed - binary not found"
     echo ""
     echo "Restoring from backup..."
     if [ -f "$BACKUP_FILE" ]; then
-        cp "$BACKUP_FILE" "$APP_DIR/target/release/airtally-rest"
+        cp "$BACKUP_FILE" "$APP_DIR/target/release/falcon-rest"
         print_success "Backup restored"
     fi
     exit 1
@@ -230,7 +230,7 @@ else
     echo "Restoring from backup..."
     if [ -f "$BACKUP_FILE" ]; then
         sudo systemctl stop $SERVICE_NAME
-        cp "$BACKUP_FILE" "$APP_DIR/target/release/airtally-rest"
+        cp "$BACKUP_FILE" "$APP_DIR/target/release/falcon-rest"
         sudo systemctl start $SERVICE_NAME
         print_success "Backup restored"
     fi
@@ -260,7 +260,7 @@ echo ""
 echo "🔧 Commands:"
 echo "  • View logs: sudo journalctl -u $SERVICE_NAME -f"
 echo "  • Restart: sudo systemctl restart $SERVICE_NAME"
-echo "  • Rollback: cp $BACKUP_FILE $APP_DIR/target/release/airtally-rest"
+echo "  • Rollback: cp $BACKUP_FILE $APP_DIR/target/release/falcon-rest"
 echo ""
 
 print_success "Update selesai!"

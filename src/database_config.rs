@@ -161,7 +161,7 @@ pub async fn create_connection_pool(
                 .execute(&mut *conn)
                 .await?;
 
-            sqlx::query("SET application_name = 'airtally-rest-api'")
+            sqlx::query("SET application_name = 'falcon-rest-api'")
                 .execute(&mut *conn)
                 .await?;
 
