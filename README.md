@@ -19,7 +19,7 @@ FALCON REST API is a high-performance backend service built with Rust for managi
 - ✅ **Offline Support** - Handle offline data sync from mobile devices
 - ✅ **High Performance** - Built with Rust/Actix-web for maximum throughput
 - ✅ **PostgreSQL Database** - Reliable data storage with ACID compliance
-- ✅ **Security Features** - API key authentication, network restrictions, rate limiting
+- ✅ **Security Features** - API key authentication, JWT tokens, rate limiting
 
 ---
 
@@ -36,8 +36,8 @@ FALCON REST API is a high-performance backend service built with Rust for managi
 
 ```bash
 # Clone repository
-git clone https://github.com/YOUR_ORG/airtally.git
-cd airtally/AirtallyRest
+git clone https://github.com/Frezneel/FalconRest.git
+cd FalconRest
 
 # Copy environment file
 cp .env.example .env
@@ -89,7 +89,7 @@ Use the migration script for a safe, guided upgrade:
 cd ~/AirtallyRest
 
 # Download migration script
-wget https://raw.githubusercontent.com/YOUR_ORG/airtally/main/AirtallyRest/migrate-to-falcon.sh
+wget https://raw.githubusercontent.com/Frezneel/FalconRest/main/migrate-to-falcon.sh
 chmod +x migrate-to-falcon.sh
 
 # Run migration
@@ -141,9 +141,6 @@ JWT_SECRET not set, using default (NOT SECURE FOR PRODUCTION)
 # API Key (change in production)
 API_KEY=$(openssl rand -hex 32)
 
-# Network restrictions (use smallest subnet for DHCP)
-ALLOWED_NETWORKS=10.17.6.0/24
-
 # Rate limiting
 RATE_LIMIT_PER_MINUTE=100
 
@@ -175,7 +172,6 @@ LOG_LEVEL=info
 # Security (CRITICAL - MUST BE CHANGED!)
 API_KEY=<openssl rand -hex 32>
 JWT_SECRET=<openssl rand -base64 48>
-ALLOWED_NETWORKS=10.17.6.0/24
 RATE_LIMIT_PER_MINUTE=100
 
 # Features
