@@ -46,9 +46,9 @@ pub async fn api_key_only_middleware(
     let expected_key = std::env::var("API_KEY").unwrap_or_else(|_| {
         // Fallback to default for development
         if config.is_development() {
-            "airtally_dev_key_2025".to_string()
+            "falcon_dev_key_2025".to_string()
         } else {
-            "airtally_production_secure_key_2025".to_string()
+            "falcon_production_secure_key_2025".to_string()
         }
     });
 
@@ -128,9 +128,9 @@ pub async fn api_auth_middleware(
     let expected_key = std::env::var("API_KEY").unwrap_or_else(|_| {
         // Fallback to default for development
         if config.is_development() {
-            "airtally_dev_key_2025".to_string()
+            "falcon_dev_key_2025".to_string()
         } else {
-            "airtally_production_secure_key_2025".to_string()
+            "falcon_production_secure_key_2025".to_string()
         }
     });
 

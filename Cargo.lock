@@ -30,35 +30,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "airtally-restapi"
-version = "0.1.0"
-dependencies = [
- "axum 0.8.6",
- "bcrypt",
- "chrono",
- "config",
- "dotenvy",
- "http-body-util",
- "jsonwebtoken",
- "lazy_static",
- "regex",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "utoipa",
- "utoipa-axum",
- "utoipa-swagger-ui",
- "validator",
-]
-
-[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -638,6 +609,35 @@ dependencies = [
  "concurrent-queue",
  "parking",
  "pin-project-lite",
+]
+
+[[package]]
+name = "falcon-restapi"
+version = "0.1.0"
+dependencies = [
+ "axum 0.8.6",
+ "bcrypt",
+ "chrono",
+ "config",
+ "dotenvy",
+ "http-body-util",
+ "jsonwebtoken",
+ "lazy_static",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "utoipa",
+ "utoipa-axum",
+ "utoipa-swagger-ui",
+ "validator",
 ]
 
 [[package]]

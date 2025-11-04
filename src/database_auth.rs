@@ -15,7 +15,7 @@ use sha2::{Sha256, Digest};
 fn get_jwt_secret() -> String {
     std::env::var("JWT_SECRET").unwrap_or_else(|_| {
         tracing::warn!("JWT_SECRET not set, using default (NOT SECURE FOR PRODUCTION)");
-        "airtally_jwt_secret_change_in_production_2025".to_string()
+        "falcon_jwt_secret_change_in_production_2025".to_string()
     })
 }
 
@@ -266,6 +266,37 @@ pub async fn change_password(
     .execute(pool)
     .await?;
 
+    Ok(())
+}
+
+/// Admin/Superuser reset user password (no old password verification needed)
+pub async fn reset_user_password(
+    pool: &PgPool,
+    user_id: i32,
+    new_password: &str,
+) -> Result<(), AppError> {
+    // Hash new password
+    let new_hash = hash(new_password, DEFAULT_COST)
+        .map_err(|e| AppError::InternalError(format!("Password hashing failed: {}", e)))?;
+
+    // Update password (no old password check - admin privilege)
+    let result = sqlx::query(
+        r#"
+        UPDATE users
+        SET password_hash = $1, updated_at = NOW()
+        WHERE id = $2
+        "#,
+    )
+    .bind(&new_hash)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound("User not found".to_string()));
+    }
+
+    tracing::info!(user_id = user_id, "Password reset by admin");
     Ok(())
 }
 

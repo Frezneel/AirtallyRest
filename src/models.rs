@@ -522,6 +522,14 @@ pub struct ChangePasswordRequest {
     pub new_password: String,
 }
 
+// Model untuk admin reset user password (admin/superuser only)
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetUserPasswordRequest {
+    #[validate(length(min = 8, message = "New password must be at least 8 characters"))]
+    pub new_password: String,
+}
+
 // Model untuk user session
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]

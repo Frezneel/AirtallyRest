@@ -45,6 +45,7 @@ pub fn create_router(db_pool: PgPool, enable_swagger: bool) -> Router {
                 .put(handlers_auth::update_user)
                 .delete(handlers_auth::delete_user),
         )
+        .route("/api/users/{id}/reset-password", post(handlers_auth::reset_user_password))
         // Role management endpoints
         .route("/api/roles", get(handlers_auth::list_roles))
         .route("/api/roles/{id}", get(handlers_auth::get_role_by_id))

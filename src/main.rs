@@ -29,7 +29,7 @@ async fn main() {
     let file_appender = RollingFileAppender::new(
         Rotation::DAILY,
         "logs",  // Directory untuk menyimpan log files
-        "airtally-errors.log",  // Nama file log
+        "falcon-errors.log",  // Nama file log
     );
 
     // Load konfigurasi dari file .env terlebih dahulu
@@ -52,7 +52,7 @@ async fn main() {
         )
         .init();
 
-    tracing::info!("Starting AirTally REST API");
+    tracing::info!("Starting FALCON REST API");
     tracing::info!("Environment: {}", config.environment);
     tracing::info!("Server address: {}", config.server_address());
     tracing::info!("Swagger UI: {}", if config.enable_swagger { "enabled" } else { "disabled" });

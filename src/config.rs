@@ -9,7 +9,7 @@ use std::env;
 /// # Examples
 ///
 /// ```
-/// use airtally_restapi::config::AppConfig;
+/// use falcon_restapi::config::AppConfig;
 ///
 /// // Load configuration from environment
 /// let config = AppConfig::from_env();

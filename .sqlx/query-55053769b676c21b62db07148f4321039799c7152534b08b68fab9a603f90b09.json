@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, barcode_value, barcode_format, scan_time, device_id, flight_id, created_at\n        FROM scan_data\n        WHERE barcode_value = $1 AND flight_id = $2\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "barcode_value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "barcode_format",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "scan_time",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "device_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "flight_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "55053769b676c21b62db07148f4321039799c7152534b08b68fab9a603f90b09"
+}

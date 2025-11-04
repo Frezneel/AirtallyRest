@@ -3,7 +3,7 @@ use crate::{
     errors::AppError,
     models::{
         ApiResponse, LoginRequest, LoginResponse, CreateUserRequest, UpdateUserRequest,
-        ChangePasswordRequest, User, UserWithRole, Role, RoleWithPermissions, ListUsersQuery,
+        ChangePasswordRequest, ResetUserPasswordRequest, User, UserWithRole, Role, RoleWithPermissions, ListUsersQuery,
     },
 };
 use axum::{
@@ -383,6 +383,46 @@ pub async fn delete_user(
     tracing::info!(user_id = id, "User deleted successfully");
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Reset user password (admin/superuser only)
+#[utoipa::path(
+    post,
+    path = "/api/users/{id}/reset-password",
+    tag = "Users",
+    request_body = ResetUserPasswordRequest,
+    responses(
+        (status = 200, description = "Password reset successfully"),
+        (status = 400, description = "Validation error"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 404, description = "User not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn reset_user_password(
+    State(pool): State<PgPool>,
+    Path(id): Path<i32>,
+    Json(payload): Json<ResetUserPasswordRequest>,
+) -> Result<Json<ApiResponse<()>>, AppError> {
+    tracing::info!(user_id = id, "Admin reset password request");
+
+    payload.validate()?;
+
+    database_auth::reset_user_password(&pool, id, &payload.new_password).await?;
+
+    tracing::info!(user_id = id, "Password reset successfully by admin");
+
+    let response = ApiResponse {
+        status: "success".to_string(),
+        message: Some("Password reset successfully".to_string()),
+        data: None,
+        total: None,
+    };
+
+    Ok(Json(response))
 }
 
 // ==================== ROLE MANAGEMENT HANDLERS ====================
