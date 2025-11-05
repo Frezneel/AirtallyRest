@@ -147,7 +147,6 @@ print_success "Secrets generated"
 # Network configuration
 echo ""
 print_info "Network Configuration"
-read -p "Enter allowed network CIDR (e.g., 10.17.6.0/24): " ALLOWED_NETWORKS
 read -p "Enter API port (default: 3000): " API_PORT
 API_PORT=${API_PORT:-3000}
 
@@ -329,9 +328,6 @@ LOG_LEVEL=info
 API_KEY=$API_KEY
 JWT_SECRET=$JWT_SECRET
 
-# Network Security
-ALLOWED_NETWORKS=$ALLOWED_NETWORKS
-
 # Rate Limiting
 RATE_LIMIT_PER_MINUTE=100
 
@@ -377,7 +373,7 @@ print_step 10 $TOTAL_STEPS "Running database migrations"
 
 sudo -u "$FALCON_USER" bash <<MIGRATE
 cd "$APP_DIR"
-source $HOME/.cargo/env
+source ~/.cargo/env
 export DATABASE_URL="postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME"
 sqlx migrate run
 MIGRATE
@@ -393,7 +389,7 @@ print_step 11 $TOTAL_STEPS "Building FALCON (this will take 10-15 minutes)"
 print_info "Starting Rust compilation..."
 sudo -u "$FALCON_USER" bash <<BUILD
 cd "$APP_DIR"
-source $HOME/.cargo/env
+source ~/.cargo/env
 SQLX_OFFLINE=true cargo build --release
 BUILD
 
@@ -460,14 +456,9 @@ fi
 # Allow SSH
 ufw allow 22/tcp comment 'SSH'
 
-# Allow API port from allowed network
-if [ ! -z "$ALLOWED_NETWORKS" ]; then
-    ufw allow from "$ALLOWED_NETWORKS" to any port "$API_PORT" comment 'FALCON API'
-    print_success "API port $API_PORT allowed from $ALLOWED_NETWORKS"
-else
-    ufw allow "$API_PORT/tcp" comment 'FALCON API'
-    print_success "API port $API_PORT allowed from anywhere"
-fi
+# Allow API port from anywhere
+ufw allow "$API_PORT/tcp" comment 'FALCON API'
+print_success "API port $API_PORT allowed from anywhere"
 
 # Reload firewall
 ufw reload
@@ -572,7 +563,7 @@ echo ""
 echo -e "${CYAN}🌐 API Information:${NC}"
 echo "  • URL: http://$(hostname -I | awk '{print $1}'):$API_PORT/api"
 echo "  • Port: $API_PORT"
-echo "  • Allowed Networks: $ALLOWED_NETWORKS"
+echo "  • Access: Open (secured by API Key + JWT)"
 echo ""
 echo -e "${CYAN}🔑 Default Superuser:${NC}"
 echo "  • Username: superuser"
