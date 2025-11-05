@@ -393,9 +393,9 @@ source ~/.cargo/env
 SQLX_OFFLINE=true cargo build --release
 BUILD
 
-if [ -f "$APP_DIR/target/release/falcon-rest" ]; then
+if [ -f "$APP_DIR/target/release/falcon-restapi" ]; then
     print_success "Build completed successfully"
-    ls -lh "$APP_DIR/target/release/falcon-rest"
+    ls -lh "$APP_DIR/target/release/falcon-restapi"
 else
     print_error "Build failed - binary not found"
     exit 1
@@ -419,7 +419,7 @@ User=$FALCON_USER
 Group=$FALCON_USER
 WorkingDirectory=$APP_DIR
 Environment="RUST_LOG=info"
-ExecStart=$APP_DIR/target/release/falcon-rest
+ExecStart=$APP_DIR/target/release/falcon-restapi
 Restart=always
 RestartSec=10
 StandardOutput=journal
